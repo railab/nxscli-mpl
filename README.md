@@ -12,3 +12,11 @@ Matplotlib extension to Nxscli.
 ## Features Planned
 
 * Stream metadata as X-axis
+
+## Instalation
+
+Nxscli-mpl can be installed by running `pip install nxscli-mpl`.
+
+To install latest development version, use:
+
+`pip install git+https://github.com/railab/nxscli-mpl.git`
