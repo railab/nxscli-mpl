@@ -19,6 +19,41 @@ if TYPE_CHECKING:
 
 
 ###############################################################################
+# Function: _create_matplotlib_inputhook
+###############################################################################
+
+
+def _create_matplotlib_inputhook() -> Any:  # pragma: no cover
+    """Create an inputhook for matplotlib event processing.
+
+    :return: inputhook function
+    """
+    try:
+        import matplotlib.pyplot as plt
+        from matplotlib import _pylab_helpers
+
+        # Enable interactive mode
+        plt.ion()
+
+        def inputhook(inputhook_context: Any) -> None:
+            """Process matplotlib events while waiting for input."""
+            if not plt.get_fignums():
+                return
+
+            for manager in _pylab_helpers.Gcf.get_all_fig_managers():
+                if manager.canvas.figure.stale:
+                    manager.canvas.draw_idle()
+                try:
+                    manager.canvas.flush_events()
+                except (NotImplementedError, AttributeError):
+                    pass
+
+        return inputhook
+    except ImportError:
+        return None
+
+
+###############################################################################
 # Class: IPluginAnimation
 ###############################################################################
 
@@ -31,6 +66,14 @@ class IPluginAnimation(IPluginPlotDynamic):
         super().__init__()
 
         self._plot: "PluginPlotMpl"
+
+    @classmethod
+    def get_inputhook(cls) -> Any:
+        """Get matplotlib inputhook for GUI event processing.
+
+        :return: inputhook function or None
+        """
+        return _create_matplotlib_inputhook()
 
     @abstractmethod
     def _start(

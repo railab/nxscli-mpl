@@ -1,4 +1,4 @@
-"""Module containing the Click types for nxscli-mpl."""
+"""Module containing the Click types for nxscli-mpl."""  # noqa: A005
 
 from typing import Any
 
