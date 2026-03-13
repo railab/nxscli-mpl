@@ -2,6 +2,8 @@
 
 import queue
 import time
+from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 from typing import TYPE_CHECKING, Any, Generator
 
@@ -556,6 +558,8 @@ class PluginPlotMpl(PluginData):
         cb: PluginDataCb,
         dpi: float = 100.0,
         fmt: list[str] | None = None,
+        mode: str = "detached",
+        parent: Any = None,
     ):
         """Intiialize a plot handler.
 
@@ -578,9 +582,13 @@ class PluginPlotMpl(PluginData):
 
         super().__init__(newchanlist, trig, cb)
 
+        self._mode = EPlotMode.from_text(mode)
         self._fig = MplManager.figure(dpi)
         self._ax: list[Axes] = []
         self._ani: list[PluginAnimationCommonMpl] = []
+        self._widget: Any = None
+        if self._mode is EPlotMode.ATTACHED:
+            self._widget = self._attached_canvas_widget()
 
         self._fmt: list[Any]
         if not fmt:
@@ -606,7 +614,7 @@ class PluginPlotMpl(PluginData):
 
     def __del__(self) -> None:
         """Close figure and clean queue handlers."""
-        MplManager.close(self._fig)
+        self.close()
         super().__del__()
 
     def _plist_init(self) -> list[PlotDataAxesMpl]:
@@ -658,6 +666,16 @@ class PluginPlotMpl(PluginData):
         return self._fig
 
     @property
+    def widget(self) -> Any:
+        """Get embeddable widget for attached mode."""
+        return self._widget
+
+    @property
+    def mode(self) -> str:
+        """Get plot mode string."""
+        return self._mode.value
+
+    @property
     def ani(self) -> list[PluginAnimationCommonMpl]:
         """Return all registered animation isntances."""
         return self._ani
@@ -686,3 +704,115 @@ class PluginPlotMpl(PluginData):
             for ax in self._ax:
                 if ax is not None:
                     ax.cla()
+
+    def close(self) -> None:
+        """Close figure and attached widget."""
+        MplManager.close(self._fig)
+        if self._widget is not None:
+            close = getattr(self._widget, "close", None)
+            if callable(close):
+                close()
+
+    def _attached_canvas_widget(self) -> Any:
+        """Return a QWidget-compatible matplotlib canvas for attached mode."""
+        canvas = getattr(self._fig, "canvas", None)
+        if self._is_qwidget(canvas):
+            return canvas
+
+        try:
+            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+        except Exception:
+            logger.warning(
+                "attached matplotlib mode requires Qt canvas backend"
+            )
+            return None
+
+        canvas = FigureCanvasQTAgg(self._fig)
+        return canvas
+
+    @staticmethod
+    def _is_qwidget(obj: Any) -> bool:
+        try:
+            from PyQt6.QtWidgets import QWidget
+        except Exception:
+            return False
+        return isinstance(obj, QWidget)
+
+    def get_vector_states(self) -> list["PlotVectorState"]:
+        """Get current vector visibility state."""
+        states: list[PlotVectorState] = []
+        for pdata in self._plist:
+            for vector, line in enumerate(pdata.lns):
+                states.append(
+                    PlotVectorState(
+                        channel=pdata.chan,
+                        vector=vector,
+                        visible=bool(line.get_visible()),
+                    )
+                )
+        return states
+
+    def set_vector_visible(
+        self, channel: int, vector: int, visible: bool
+    ) -> None:
+        """Set vector visibility in real time."""
+        for pdata in self._plist:
+            if pdata.chan != channel:
+                continue
+            if vector < 0 or vector >= len(pdata.lns):
+                raise ValueError(
+                    f"Invalid vector index {vector} for channel {channel}"
+                )
+            pdata.lns[vector].set_visible(visible)
+            canvas = pdata.ax.figure.canvas
+            if canvas is not None:
+                draw_idle = getattr(canvas, "draw_idle", None)
+                if callable(draw_idle):
+                    draw_idle()
+            return
+        raise ValueError(f"Channel {channel} not found")
+
+
+class EPlotMode(Enum):
+    """Available plot display modes."""
+
+    DETACHED = "detached"
+    ATTACHED = "attached"
+
+    @classmethod
+    def from_text(cls, value: str) -> "EPlotMode":
+        """Parse mode string with safe fallback."""
+        for mode in cls:
+            if mode.value == value:
+                return mode
+        return cls.DETACHED
+
+
+@dataclass(frozen=True)
+class PlotVectorState:
+    """Per-vector visibility state."""
+
+    channel: int
+    vector: int
+    visible: bool
+
+
+def create_plot_surface(
+    chanlist: list["DeviceChannel"],
+    trig: list["TriggerHandler"],
+    cb: PluginDataCb,
+    dpi: float = 100.0,
+    fmt: list[str] | None = None,
+    mode: str = "detached",
+    parent: Any = None,
+) -> PluginPlotMpl:
+    """Factory for plot surface in detached or attached mode."""
+    return PluginPlotMpl(
+        chanlist=chanlist,
+        trig=trig,
+        cb=cb,
+        dpi=dpi,
+        fmt=fmt,
+        mode=mode,
+        parent=parent,
+    )

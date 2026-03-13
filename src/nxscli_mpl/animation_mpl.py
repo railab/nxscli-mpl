@@ -140,7 +140,13 @@ class IPluginAnimation(IPluginPlotDynamic):
 
         cb = self._phandler.cb_get()
         self._plot = PluginPlotMpl(
-            chanlist, trig, cb, dpi=kwargs["dpi"], fmt=kwargs["fmt"]
+            chanlist,
+            trig,
+            cb,
+            dpi=kwargs["dpi"],
+            fmt=kwargs["fmt"],
+            mode=str(kwargs.get("plot_mode", "detached")),
+            parent=kwargs.get("plot_parent"),
         )
 
         # clear previous animations
@@ -161,5 +167,6 @@ class IPluginAnimation(IPluginPlotDynamic):
     def result(self) -> "PluginPlotMpl":
         """Get animation plugin result."""
         assert self._plot
-        MplManager.show(block=False)
+        if self._plot.mode == "detached":
+            MplManager.show(block=False)
         return self._plot
