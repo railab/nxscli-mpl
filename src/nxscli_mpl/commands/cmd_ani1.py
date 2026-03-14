@@ -30,7 +30,7 @@ def cmd_pani1(
     """[plugin] Animation plot without a length limit (infinite plot)."""
     assert ctx.phandler
     ctx.phandler.enable(
-        "animation1", channels=chan, trig=trig, dpi=dpi, fmt=fmt, write=write
+        "ani1", channels=chan, trig=trig, dpi=dpi, fmt=fmt, write=write
     )
 
     ctx.needchannels = True
