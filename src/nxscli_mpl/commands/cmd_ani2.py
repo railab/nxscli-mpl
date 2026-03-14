@@ -36,7 +36,7 @@ def cmd_pani2(
         return False
 
     ctx.phandler.enable(
-        "animation2",
+        "ani2",
         maxsamples=maxsamples,
         channels=chan,
         trig=trig,

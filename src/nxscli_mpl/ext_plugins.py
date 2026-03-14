@@ -8,6 +8,6 @@ from nxscli_mpl.plugins.capture import PluginCapture
 
 plugins_list = [
     DPluginDescription("capture", PluginCapture),
-    DPluginDescription("animation1", PluginAnimation1),
-    DPluginDescription("animation2", PluginAnimation2),
+    DPluginDescription("ani1", PluginAnimation1),
+    DPluginDescription("ani2", PluginAnimation2),
 ]
