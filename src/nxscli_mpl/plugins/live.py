@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 ###############################################################################
 
 
-class Animation1(PluginAnimationCommonMpl):
+class LiveAnimation(PluginAnimationCommonMpl):
     """Infinity animation with x axis extension."""
 
     def __init__(
@@ -59,11 +59,11 @@ class Animation1(PluginAnimationCommonMpl):
 
 
 ###############################################################################
-# Class: PluginAnimation1
+# Class: PluginLive
 ###############################################################################
 
 
-class PluginAnimation1(IPluginAnimation):
+class PluginLive(IPluginAnimation):
     """Infinity animation with x axis extension."""
 
     def __init__(self) -> None:
@@ -78,4 +78,4 @@ class PluginAnimation1(IPluginAnimation):
         kwargs: Any,
     ) -> PluginAnimationCommonMpl:
         """Start an animation1 plugin."""
-        return Animation1(fig, pdata, qdata, kwargs["write"])
+        return LiveAnimation(fig, pdata, qdata, kwargs["write"])

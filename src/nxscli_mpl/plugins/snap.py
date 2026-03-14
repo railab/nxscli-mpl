@@ -15,11 +15,11 @@ if TYPE_CHECKING:
 
 
 ###############################################################################
-# Class: PluginCapture
+# Class: PluginSnap
 ###############################################################################
 
 
-class PluginCapture(PluginThread, IPluginPlotStatic):
+class PluginSnap(PluginThread, IPluginPlotStatic):
     """Plugin that plot static captured data."""
 
     def __init__(self) -> None:

@@ -1,0 +1,50 @@
+"""Module containing polar stream plugin command."""
+
+from typing import TYPE_CHECKING
+
+import click
+from nxscli.cli.environment import Environment, pass_environment
+
+from nxscli_mpl.cli.types import plot_options
+
+if TYPE_CHECKING:
+    from nxscli.trigger import DTriggerConfigReq
+
+
+@click.command(name="m_polar_live")
+@click.argument("window", type=int, required=True)
+@click.option("--hop", type=int, default=0, show_default=True)
+@click.option(
+    "--align-policy",
+    type=click.Choice(["truncate"]),
+    default="truncate",
+    show_default=True,
+)
+@plot_options
+@pass_environment
+def cmd_mpolar_stream(
+    ctx: Environment,
+    window: int,
+    hop: int,
+    align_policy: str,
+    chan: list[int],
+    trig: dict[int, "DTriggerConfigReq"],
+    dpi: float,
+    fmt: list[list[str]],
+    write: str,
+) -> bool:
+    """[plugin] Windowed streaming polar plot."""
+    assert ctx.phandler
+    ctx.phandler.enable(
+        "m_polar_live",
+        window=window,
+        hop=hop,
+        align_policy=align_policy,
+        channels=chan,
+        trig=trig,
+        dpi=dpi,
+        fmt=fmt,
+        write=write,
+    )
+    ctx.needchannels = True
+    return True

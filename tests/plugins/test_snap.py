@@ -3,15 +3,14 @@ from nxslib.dev import DeviceChannel
 from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.plot_mpl import PlotDataCommon
-from nxscli_mpl.plugins.capture import PluginCapture
+from nxscli_mpl.plugins.snap import PluginSnap
 
 
 def test_plugincapture_init():
-    plugin = PluginCapture()
+    plugin = PluginSnap()
 
     assert plugin.stream is True
-
-    # TODO:
+    assert plugin.get_plot_handler() is None
 
 
 def test_plugincapture_handle_blocks_updates_datalen() -> None:
@@ -21,7 +20,7 @@ def test_plugincapture_handle_blocks_updates_datalen() -> None:
         def __init__(self) -> None:
             self.plist = [PlotDataCommon(chan)]
 
-    plugin = PluginCapture()
+    plugin = PluginSnap()
     plugin._plot = DummyPlot()
     plugin._datalen = [0]
     pdata = type("Q", (), {"vdim": 2})()
@@ -64,7 +63,7 @@ def test_plugincapture_thread_common_numpy_path() -> None:
             self.plist = [PlotDataCommon(chan)]
             self.qdlist = [DummyQData()]
 
-    plugin = PluginCapture()
+    plugin = PluginSnap()
     plugin._plot = DummyPlot()
     plugin._plugindata = plugin._plot
     plugin._datalen = [0]
@@ -87,9 +86,11 @@ def test_plugincapture_result_attached_mode_skips_show() -> None:
             self.plist = [DummyPlotData()]
             self.fig = None
 
-    plugin = PluginCapture()
+    plugin = PluginSnap()
     plugin._plot = DummyPlot()
     plugin._write = ""
+
+    assert plugin.get_plot_handler() is plugin._plot
 
     out = plugin.result()
 
