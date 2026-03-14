@@ -1,26 +1,25 @@
 """The matplotlib plot specific module."""
 
-import queue
 import time
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from typing import TYPE_CHECKING, Any, Generator
 
-import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import _pylab_helpers
-from matplotlib.animation import FuncAnimation  # type: ignore
-from matplotlib.animation import FFMpegWriter, PillowWriter
+from matplotlib.animation import FFMpegWriter, FuncAnimation, PillowWriter
 from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
 from nxscli.logger import logger
+from nxslib.nxscope import DNxscopeStreamBlock
 
 if TYPE_CHECKING:
-    from matplotlib.axes import Axes  # type: ignore
-    from matplotlib.figure import Figure  # type: ignore
-    from matplotlib.lines import Line2D  # type: ignore
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
     from nxscli.trigger import TriggerHandler
     from nxslib.dev import DeviceChannel
-    from nxslib.nxscope import DNxscopeStream
 
 
 ###############################################################################
@@ -352,6 +351,7 @@ class PluginAnimationCommonMpl:
         self._pdata = pdata
         self._qdata = qdata
         self._ani = None
+        self._writer: PillowWriter | FFMpegWriter | None
 
         if write:  # pragma: no cover
             fps = 10
@@ -371,36 +371,63 @@ class PluginAnimationCommonMpl:
         else:
             self._writer = None
 
-    def _animation_init(self, pdata: PlotDataAxesMpl) -> "Line2D":
+    def _animation_init(self, pdata: PlotDataAxesMpl) -> list["Line2D"]:
         return pdata.lns
 
     def _animation_frames(
         self, qdata: PluginQueueData
     ) -> Generator[Any, None, None]:  # pragma: no cover
-        ydata: list[list[Any]] = []
-        xdata: list[list[Any]] = []
+        xdata, ydata = self._animation_frames_blocks(qdata)
+        yield xdata, ydata
 
-        for _ in range(self._qdata.vdim):
-            ydata.append([])
-            xdata.append([])
+    def _animation_frames_blocks(
+        self, qdata: PluginQueueData
+    ) -> tuple[list[np.ndarray[Any, Any]], list[np.ndarray[Any, Any]]]:
+        x_chunks: list[np.ndarray[Any, Any]] = []
+        y_chunks: list[list[np.ndarray[Any, Any]]] = [
+            [] for _ in range(self._qdata.vdim)
+        ]
 
         # limit to 100 samples per frame
         for _ in range(100):
-            data: list["DNxscopeStream"] = []
-            try:
-                # this must be non-blocking for queue.Empty exception
-                data = qdata.queue_get(block=False)
-            except queue.Empty:
+            data = qdata.queue_get(block=False)
+            if not data:
                 break
 
-            # print("qsize=", qdata._queue.qsize())
-            for sample in data:
-                for i in range(self._qdata.vdim):
-                    ydata[i].append(sample.data[i])
-                    xdata[i].append(self._cnt)
-                self._cnt += 1
+            if not isinstance(data, list):
+                raise RuntimeError("plot animation queue payload must be list")
 
-        yield xdata, ydata
+            for block in data:
+                if not isinstance(block, DNxscopeStreamBlock):
+                    raise RuntimeError(
+                        "plot animation requires DNxscopeStreamBlock payload"
+                    )
+                block_data = block.data
+                assert isinstance(block_data, np.ndarray)
+                nsamples = int(block_data.shape[0])
+                if nsamples == 0:
+                    continue
+                xr = np.arange(self._cnt, self._cnt + nsamples)
+                x_chunks.append(xr)
+                for i in range(self._qdata.vdim):
+                    y_chunks[i].append(block_data[:, i])
+                self._cnt += nsamples
+
+        xcat = (
+            np.concatenate(x_chunks)
+            if x_chunks
+            else np.empty((0,), dtype=np.int64)
+        )
+        xdata = [xcat for _ in range(self._qdata.vdim)]
+        ydata = [
+            (
+                np.concatenate(chunks)
+                if chunks
+                else np.empty((0,), dtype=np.float64)
+            )
+            for chunks in y_chunks
+        ]
+        return xdata, ydata
 
     def _animation_update(
         self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
@@ -478,7 +505,7 @@ class PluginAnimationCommonMpl:
         new_ymin = ymin
         for data in frame:
             # do nothing if empty
-            if not data:
+            if len(data) == 0:
                 return
 
             # get min/max
@@ -535,8 +562,10 @@ class PluginAnimationCommonMpl:
         xmin, xmax = pdata.ax.get_xlim()
 
         # change x scale fit for xdata
-        new_xmin = pdata.xdata[0]
-        new_xmax = pdata.xdata[-1]
+        if not pdata.xdata or not pdata.xdata[0]:
+            return
+        new_xmin = pdata.xdata[0][0]
+        new_xmax = pdata.xdata[0][-1]
         if xmin > new_xmin or xmax < new_xmax:
             pdata.ax.set_xlim(new_xmin, new_xmax)
             # TODO: revisit
@@ -713,7 +742,7 @@ class PluginPlotMpl(PluginData):
             if callable(close):
                 close()
 
-    def _attached_canvas_widget(self) -> Any:
+    def _attached_canvas_widget(self) -> Any:  # pragma: no cover
         """Return a QWidget-compatible matplotlib canvas for attached mode."""
         canvas = getattr(self._fig, "canvas", None)
         if self._is_qwidget(canvas):
@@ -727,16 +756,16 @@ class PluginPlotMpl(PluginData):
             )
             return None
 
-        canvas = FigureCanvasQTAgg(self._fig)
-        return canvas
+        figure_canvas = FigureCanvasQTAgg
+        return figure_canvas(self._fig)  # type: ignore[no-untyped-call]
 
     @staticmethod
-    def _is_qwidget(obj: Any) -> bool:
+    def _is_qwidget(obj: Any) -> bool:  # pragma: no cover
         try:
-            from PyQt6.QtWidgets import QWidget
+            import PyQt6.QtWidgets as QtWidgets  # type: ignore[import-not-found]  # noqa: N813,E501
         except Exception:
             return False
-        return isinstance(obj, QWidget)
+        return isinstance(obj, QtWidgets.QWidget)
 
     def get_vector_states(self) -> list["PlotVectorState"]:
         """Get current vector visibility state."""
@@ -767,7 +796,7 @@ class PluginPlotMpl(PluginData):
             canvas = pdata.ax.figure.canvas
             if canvas is not None:
                 draw_idle = getattr(canvas, "draw_idle", None)
-                if callable(draw_idle):
+                if callable(draw_idle):  # pragma: no cover
                     draw_idle()
             return
         raise ValueError(f"Channel {channel} not found")
@@ -806,7 +835,7 @@ def create_plot_surface(
     mode: str = "detached",
     parent: Any = None,
 ) -> PluginPlotMpl:
-    """Factory for plot surface in detached or attached mode."""
+    """Create plot surface in detached or attached mode."""
     return PluginPlotMpl(
         chanlist=chanlist,
         trig=trig,

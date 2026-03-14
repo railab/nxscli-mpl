@@ -112,3 +112,31 @@ def test_ipluginanimation_start(nxscope):
 
     # clean up
     p.cleanup()
+
+
+def test_ipluginanimation_get_inputhook():
+    hook = IPluginAnimation.get_inputhook()
+    assert hook is not None
+    hook(None)
+
+
+def test_ipluginanimation_result_attached(nxscope):
+    x = XTestPluginAnimation()
+    p = PluginHandler()
+    p.nxscope_connect(nxscope)
+    x.connect_phandler(p)
+    p.channels_configure([1], 0)
+
+    args = {
+        "channels": [1],
+        "trig": [],
+        "dpi": 100,
+        "fmt": [""],
+        "write": False,
+        "plot_mode": "attached",
+    }
+    assert x.start(args) is True
+    plot = x.result()
+    assert plot.mode == "attached"
+    x.stop()
+    p.cleanup()

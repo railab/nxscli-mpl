@@ -6,8 +6,8 @@ from nxscli_mpl.animation_mpl import IPluginAnimation
 from nxscli_mpl.plot_mpl import PlotDataAxesMpl, PluginAnimationCommonMpl
 
 if TYPE_CHECKING:
-    from matplotlib.figure import Figure  # type: ignore
-    from matplotlib.lines import Line2D  # type: ignore
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
     from nxscli.idata import PluginQueueData
 
 
@@ -37,7 +37,7 @@ class Animation1(PluginAnimationCommonMpl):
 
     def _animation_update(
         self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
-    ) -> "Line2D":  # pragma: no cover
+    ) -> list["Line2D"]:  # pragma: no cover
         """Update an animation with dynamic scaling."""
         # update sample
         pdata.xdata_extend(frame[0])

@@ -14,7 +14,7 @@ from nxscli_mpl.plot_mpl import (
 )
 
 if TYPE_CHECKING:
-    from matplotlib.figure import Figure  # type: ignore
+    from matplotlib.figure import Figure
     from nxscli.idata import PluginQueueData
 
 
