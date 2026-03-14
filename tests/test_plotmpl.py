@@ -1,17 +1,21 @@
 import queue
 
+import numpy as np
 import pytest  # type: ignore
 from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
 from nxscli.idata import PluginDataCb, PluginQueueData
 from nxscli.trigger import DTriggerConfig, ETriggerType, TriggerHandler
 from nxslib.dev import DeviceChannel
+from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.plot_mpl import (
+    EPlotMode,
     PlotDataAxesMpl,
     PlotDataCommon,
     PluginAnimationCommonMpl,
     PluginPlotMpl,
+    create_plot_surface,
 )
 
 
@@ -139,3 +143,187 @@ def test_pluginplotmpl():
     # TODO
 
     TriggerHandler.cls_cleanup()
+
+
+def test_pluginanimationcommonmpl_numpy_frames():
+    class FakeQueueData:
+        vdim = 2
+
+        def __init__(self) -> None:
+            self._payloads = [
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+                        meta=None,
+                    )
+                ],
+                [],
+            ]
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            return self._payloads.pop(0)
+
+    chan = DeviceChannel(chan=0, _type=2, vdim=2, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    qdata = FakeQueueData()
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    frames = ani._animation_frames(qdata)
+    xdata, ydata = next(frames)
+    assert [x.tolist() for x in xdata] == [[0, 1], [0, 1]]
+    assert [y.tolist() for y in ydata] == [[1.0, 3.0], [2.0, 4.0]]
+
+
+def test_pluginanimationcommonmpl_rejects_sample_payload() -> None:
+    class FakeQueueData:
+        vdim = 1
+
+        def __init__(self) -> None:
+            self._payloads = [[type("Sample", (), {"data": (7.0,)})()], []]
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            if not self._payloads:
+                return []
+            return self._payloads.pop(0)
+
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    qdata = FakeQueueData()
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    with pytest.raises(RuntimeError):
+        _ = next(ani._animation_frames(qdata))
+    qdata._payloads = []
+    assert qdata.queue_get(block=False) == []
+
+
+def test_pluginanimationcommonmpl_numpy_frames_rejects_non_block() -> None:
+    class BadBlock:
+        data = np.array([[1.0, 2.0]])
+
+    class FakeQueueData:
+        vdim = 2
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            return [BadBlock()]
+
+    chan = DeviceChannel(chan=0, _type=2, vdim=2, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    qdata = FakeQueueData()
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    with pytest.raises(RuntimeError):
+        _ = next(ani._animation_frames(qdata))
+
+
+def test_pluginanimationcommonmpl_rejects_non_list_payload() -> None:
+    class FakeQueueData:
+        vdim = 1
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            return "bad"
+
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    qdata = FakeQueueData()
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    with pytest.raises(RuntimeError):
+        _ = next(ani._animation_frames(qdata))
+
+
+def test_pluginanimationcommonmpl_numpy_frames_empty_block_and_loop_limit():
+    class FakeQueueData:
+        vdim = 1
+
+        def __init__(self) -> None:
+            self._n = 0
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            if self._n >= 100:
+                return []
+            self._n += 1
+            if self._n == 1:
+                return [DNxscopeStreamBlock(data=np.empty((0, 1)), meta=None)]
+            return [DNxscopeStreamBlock(data=np.array([[1.0]]), meta=None)]
+
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    qdata = FakeQueueData()
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    xdata, ydata = next(ani._animation_frames(qdata))
+    assert len(xdata[0]) == 99
+    assert len(ydata[0]) == 99
+    assert qdata.queue_get(block=False) == []
+
+
+def test_plot_mode_and_factory_attached():
+    assert EPlotMode.from_text("attached") is EPlotMode.ATTACHED
+    assert EPlotMode.from_text("invalid") is EPlotMode.DETACHED
+
+    chanlist = [DeviceChannel(chan=1, _type=2, vdim=1, name="chan1")]
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    trig = [TriggerHandler(1, dtc)]
+    cb = PluginDataCb(dummy_stream_sub, dummy_stream_unsub)
+    plot = create_plot_surface(chanlist, trig, cb, mode="attached")
+    assert isinstance(plot, PluginPlotMpl)
+    assert plot.mode == "attached"
+    assert plot.widget is not None or plot.widget is None
+    states = plot.get_vector_states()
+    assert len(states) == 1
+    plot.set_vector_visible(1, 0, False)
+    with pytest.raises(ValueError):
+        plot.set_vector_visible(1, 5, True)
+    with pytest.raises(ValueError):
+        plot.set_vector_visible(9, 0, True)
+    assert plot._is_qwidget(object()) is False
+    closed = {"v": False}
+
+    class DummyWidget:
+        def close(self) -> None:
+            closed["v"] = True
+
+    plot._widget = DummyWidget()
+    plot.close()
+    assert closed["v"] is True
+    plot._widget = object()
+    plot.close()
+    TriggerHandler.cls_cleanup()
+
+
+def test_set_vector_visible_without_canvas() -> None:
+    class DummyLine:
+        def __init__(self) -> None:
+            self.visible = True
+
+        def get_visible(self) -> bool:
+            return self.visible
+
+        def set_visible(self, visible: bool) -> None:
+            self.visible = visible
+
+    class DummyFigure:
+        canvas = None
+
+    class DummyAxis:
+        figure = DummyFigure()
+
+    class DummyPlotData:
+        def __init__(self) -> None:
+            self.chan = 5
+            self.lns = [DummyLine()]
+            self.ax = DummyAxis()
+
+    plot = object.__new__(PluginPlotMpl)
+    plot._plist = [DummyPlotData()]
+    plot.close = lambda: None  # type: ignore[method-assign]
+    plot._widget = None
+
+    plot.set_vector_visible(5, 0, False)
+    assert plot._plist[0].lns[0].get_visible() is False

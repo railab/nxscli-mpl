@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from nxscli.iplugin import IPluginPlotStatic
 from nxscli.logger import logger
 from nxscli.pluginthr import PluginThread
@@ -10,7 +11,7 @@ from nxscli_mpl.plot_mpl import MplManager, PluginPlotMpl
 
 if TYPE_CHECKING:
     from nxscli.idata import PluginQueueData
-    from nxslib.nxscope import DNxscopeStream
+    from nxslib.nxscope import DNxscopeStreamBlock
 
 
 ###############################################################################
@@ -35,19 +36,22 @@ class PluginCapture(PluginThread, IPluginPlotStatic):
     def _final(self) -> None:
         logger.info("plot capture DONE")
 
-    def _handle_samples(
-        self, data: list["DNxscopeStream"], pdata: "PluginQueueData", j: int
+    def _handle_blocks(
+        self,
+        data: list["DNxscopeStreamBlock"],
+        pdata: "PluginQueueData",
+        j: int,
     ) -> None:
-        # store data
-        ydata: list[list[Any]] = [[] for v in range(pdata.vdim)]
-        for sample in data:
+        ydata: list[list[Any]] = [[] for _ in range(pdata.vdim)]
+        for block in data:
+            block_data = block.data
+            assert isinstance(block_data, np.ndarray)
+            if int(block_data.shape[0]) == 0:  # pragma: no cover
+                continue
             for i in range(pdata.vdim):
-                # TODO: metadata not supported for now
-                ydata[i].append(sample.data[i])
+                ydata[i].extend(block_data[:, i])
 
-        # extend ydata
         self._plot.plist[j].ydata_extend(ydata)
-        # get data len
         self._datalen[j] = len(self._plot.plist[j].ydata[0])
 
     def wait_for_plugin(self) -> bool:  # pragma: no cover
