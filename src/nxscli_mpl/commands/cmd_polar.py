@@ -1,9 +1,10 @@
-"""Module containing animation1 plugin command."""
+"""Module containing polar plugin command."""
 
 from typing import TYPE_CHECKING
 
 import click
 from nxscli.cli.environment import Environment, pass_environment
+from nxscli.cli.types import Samples
 
 from nxscli_mpl.cli.types import plot_options
 
@@ -11,28 +12,34 @@ if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
 
 
-###############################################################################
-# Command: cmd_m_live
-###############################################################################
-
-
-@click.command(name="m_live")
+@click.command(name="m_polar")
+@click.argument("samples", type=Samples(), required=True)
 @plot_options
 @pass_environment
-def cmd_m_live(
+def cmd_mpolar(
     ctx: Environment,
+    samples: int,
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
-    """[plugin] Animation plot without a length limit (infinite plot)."""
+    """[plugin] Static polar plot for a given number of samples."""
     assert ctx.phandler
+    if samples == 0:  # pragma: no cover
+        ctx.waitenter = True
+
     ctx.phandler.enable(
-        "m_live", channels=chan, trig=trig, dpi=dpi, fmt=fmt, write=write
+        "m_polar",
+        samples=samples,
+        channels=chan,
+        trig=trig,
+        dpi=dpi,
+        fmt=fmt,
+        write=write,
+        nostop=ctx.waitenter,
     )
 
     ctx.needchannels = True
-
     return True

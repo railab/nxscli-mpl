@@ -75,6 +75,13 @@ class IPluginAnimation(IPluginPlotDynamic):
         """
         return _create_matplotlib_inputhook()
 
+    def get_plot_handler(self) -> "PluginPlotMpl | None":
+        """Return the matplotlib plot handler.
+
+        :return: PluginPlotMpl instance, or None if start() has not been called
+        """
+        return getattr(self, "_plot", None)
+
     @abstractmethod
     def _start(
         self,

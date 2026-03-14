@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 ###############################################################################
 
 
-class Animation2(PluginAnimationCommonMpl):
+class RollAnimation(PluginAnimationCommonMpl):
     """Animation with x axis saturation."""
 
     def __init__(
@@ -101,11 +101,11 @@ class Animation2(PluginAnimationCommonMpl):
 
 
 ###############################################################################
-# Class: PluginAnimation2
+# Class: PluginRoll
 ###############################################################################
 
 
-class PluginAnimation2(IPluginAnimation):
+class PluginRoll(IPluginAnimation):
     """Animation with x axis saturation."""
 
     def __init__(self) -> None:
@@ -127,7 +127,7 @@ class PluginAnimation2(IPluginAnimation):
         pdata.set_xlim((0, maxsamples))
 
         # start animation
-        return Animation2(
+        return RollAnimation(
             fig,
             pdata,
             qdata,

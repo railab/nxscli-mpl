@@ -12,15 +12,15 @@ if TYPE_CHECKING:
 
 
 ###############################################################################
-# Command: cmd_pani2
+# Command: cmd_m_roll
 ###############################################################################
 
 
-@click.command(name="pani2")
+@click.command(name="m_roll")
 @click.argument("maxsamples", type=int, required=True)
 @plot_options
 @pass_environment
-def cmd_pani2(
+def cmd_m_roll(
     ctx: Environment,
     maxsamples: int,
     chan: list[int],
@@ -36,7 +36,7 @@ def cmd_pani2(
         return False
 
     ctx.phandler.enable(
-        "ani2",
+        "m_roll",
         maxsamples=maxsamples,
         channels=chan,
         trig=trig,

@@ -1,4 +1,4 @@
-"""Module containing captgure plugin command."""
+"""Module containing histogram plugin command."""
 
 from typing import TYPE_CHECKING
 
@@ -12,37 +12,30 @@ if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
 
 
-###############################################################################
-# Command: cmd_m_snap
-###############################################################################
-
-
-@click.command(name="m_snap")
+@click.command(name="m_hist")
 @click.argument("samples", type=Samples(), required=True)
+@click.option("--bins", type=int, default=32, show_default=True)
 @plot_options
 @pass_environment
-def cmd_m_snap(
+def cmd_phist(
     ctx: Environment,
     samples: int,
+    bins: int,
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
-    """[plugin] Static plot for a given number of samples.
-
-    If SAMPLES argument is set to 'i' then we capture data until enter
-    is press.
-    """  # noqa: D301
-    # wait for enter if samples set to 'i'
+    """[plugin] Static histogram plot for a given number of samples."""
     assert ctx.phandler
     if samples == 0:  # pragma: no cover
         ctx.waitenter = True
 
     ctx.phandler.enable(
-        "m_snap",
+        "m_hist",
         samples=samples,
+        bins=bins,
         channels=chan,
         trig=trig,
         dpi=dpi,
@@ -52,5 +45,4 @@ def cmd_m_snap(
     )
 
     ctx.needchannels = True
-
     return True

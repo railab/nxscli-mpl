@@ -43,6 +43,7 @@ def test_ipluginanimation_init():
 
     assert x.stream is True
     assert x.data_wait() is True
+    assert x.get_plot_handler() is None
 
     p = PluginHandler()
     x.connect_phandler(p)
@@ -100,6 +101,9 @@ def test_ipluginanimation_start(nxscope):
         "write": False,
     }
     assert x.start(args) is True
+
+    # get_plot_handler returns the PluginPlotMpl after start
+    assert x.get_plot_handler() is not None
 
     # clear
     x.clear()
