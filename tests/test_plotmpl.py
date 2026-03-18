@@ -4,7 +4,7 @@ import numpy as np
 import pytest  # type: ignore
 from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
-from nxscli.idata import PluginDataCb, PluginQueueData
+from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
 from nxscli.trigger import DTriggerConfig, ETriggerType, TriggerHandler
 from nxslib.dev import DeviceChannel
 from nxslib.nxscope import DNxscopeStreamBlock
@@ -327,3 +327,23 @@ def test_set_vector_visible_without_canvas() -> None:
 
     plot.set_vector_visible(5, 0, False)
     assert plot._plist[0].lns[0].get_visible() is False
+
+
+def test_pluginplotmpl_del_ignores_close_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called = {"base_del": False}
+
+    def fake_close() -> None:
+        raise RuntimeError("close failed")
+
+    def fake_base_del(self: PluginData) -> None:
+        called["base_del"] = True
+
+    plot = object.__new__(PluginPlotMpl)
+    plot.close = fake_close  # type: ignore[method-assign]
+    monkeypatch.setattr(PluginData, "__del__", fake_base_del)
+
+    PluginPlotMpl.__del__(plot)
+
+    assert called["base_del"] is True

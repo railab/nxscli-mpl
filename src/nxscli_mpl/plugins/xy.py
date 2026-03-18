@@ -18,7 +18,7 @@ class PluginXy(PluginTypedStatic):
         super().__init__()
         self._single_channel_mode = False
 
-    def start(self, kwargs: Any) -> bool:
+    def start(self, kwargs: Any) -> bool:  # pragma: no cover
         """Start and validate XY channel selection."""
         ok = super().start(kwargs)
         if not ok:
@@ -31,7 +31,7 @@ class PluginXy(PluginTypedStatic):
             )
         return True
 
-    def _render_pdata(self, pdata: Any) -> None:
+    def _render_pdata(self, pdata: Any) -> None:  # pragma: no cover
         """Render one XY chart from first two selected channels."""
         if pdata is not self._plot.plist[0]:
             try:

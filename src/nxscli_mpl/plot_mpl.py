@@ -643,7 +643,10 @@ class PluginPlotMpl(PluginData):
 
     def __del__(self) -> None:
         """Close figure and clean queue handlers."""
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            pass
         super().__del__()
 
     def _plist_init(self) -> list[PlotDataAxesMpl]:
@@ -736,11 +739,17 @@ class PluginPlotMpl(PluginData):
 
     def close(self) -> None:
         """Close figure and attached widget."""
-        MplManager.close(self._fig)
-        if self._widget is not None:
-            close = getattr(self._widget, "close", None)
+        fig = getattr(self, "_fig", None)
+        if fig is not None:
+            MplManager.close(fig)
+            del self._fig
+
+        widget = getattr(self, "_widget", None)
+        if widget is not None:
+            close = getattr(widget, "close", None)
             if callable(close):
                 close()
+            self._widget = None
 
     def _attached_canvas_widget(self) -> Any:  # pragma: no cover
         """Return a QWidget-compatible matplotlib canvas for attached mode."""
