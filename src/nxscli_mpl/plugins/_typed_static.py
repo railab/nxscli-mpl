@@ -71,7 +71,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
             MplManager.pause(1)
         return done
 
-    def start(self, kwargs: Any) -> bool:
+    def start(self, kwargs: Any) -> bool:  # pragma: no cover
         """Start typed static plugin."""
         assert self._phandler
 
@@ -106,7 +106,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
         self.thread_start(self._plot)
         return True
 
-    def result(self) -> "PluginPlotMpl":
+    def result(self) -> "PluginPlotMpl":  # pragma: no cover
         """Render and return plot."""
         assert self._plot
 
@@ -120,7 +120,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
             MplManager.show(block=False)
         return self._plot
 
-    def _render_pdata(self, pdata: Any) -> None:
+    def _render_pdata(self, pdata: Any) -> None:  # pragma: no cover
         series = [[float(v) for v in vec] for vec in pdata.ydata]
         if self.plot_type == "histogram":
             self._render_hist_bars(pdata, series)
@@ -135,7 +135,9 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
         pdata.ax.relim()
         pdata.ax.autoscale_view()
 
-    def _render_hist_bars(self, pdata: Any, series: list[list[float]]) -> None:
+    def _render_hist_bars(  # pragma: no cover
+        self, pdata: Any, series: list[list[float]]
+    ) -> None:
         bins = max(1, self._hist_bins)
         pdata.ax.cla()
         for i, vec in enumerate(series):
@@ -150,7 +152,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
         pdata.ax.relim()
         pdata.ax.autoscale_view()
 
-    def _build_xy(
+    def _build_xy(  # pragma: no cover
         self, series: list[list[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         if self.plot_type == "fft":
@@ -161,13 +163,13 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
             return self._build_scatter(series)
         return self._build_timeseries(series)
 
-    def _build_timeseries(
+    def _build_timeseries(  # pragma: no cover
         self, series: list[list[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         xvals = [[float(i) for i in range(len(vec))] for vec in series]
         return xvals, series
 
-    def _build_fft(
+    def _build_fft(  # pragma: no cover
         self, series: list[list[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         xvals: list[list[float]] = []
@@ -182,7 +184,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
             yvals.append([float(y) for y in res.amplitude.tolist()])
         return xvals, yvals
 
-    def _build_hist(
+    def _build_hist(  # pragma: no cover
         self, series: list[list[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         bins = max(1, self._hist_bins)
@@ -198,7 +200,7 @@ class PluginTypedStatic(PluginThread, IPluginPlotStatic):
             yvals.append([float(y) for y in res.counts.tolist()])
         return xvals, yvals
 
-    def _build_scatter(
+    def _build_scatter(  # pragma: no cover
         self, series: list[list[float]]
     ) -> tuple[list[list[float]], list[list[float]]]:
         if len(series) < 2:

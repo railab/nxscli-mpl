@@ -1,5 +1,6 @@
-"""Tests for windowed plugin get_plot_handler()."""
+"""Tests for windowed plugin hooks and get_plot_handler()."""
 
+import nxscli_mpl.plugins._typed_windowed as typed_windowed
 from nxscli_mpl.plugins._typed_windowed import (
     PluginFftStream,
     PluginHistStream,
@@ -7,6 +8,20 @@ from nxscli_mpl.plugins._typed_windowed import (
     PluginXyStream,
 )
 from nxscli_mpl.plugins.fft import PluginFft
+
+
+def test_windowed_get_inputhook(monkeypatch) -> None:
+    """Test windowed plugins delegate get_inputhook()."""
+    sentinel = object()
+    monkeypatch.setattr(
+        typed_windowed,
+        "_create_matplotlib_inputhook",
+        lambda: sentinel,
+    )
+
+    assert PluginFftStream.get_inputhook() is sentinel
+    assert PluginXyStream.get_inputhook() is sentinel
+    assert PluginPolarStream.get_inputhook() is sentinel
 
 
 def test_typed_static_get_plot_handler() -> None:

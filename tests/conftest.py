@@ -1,6 +1,7 @@
 from unittest import mock
 
 import matplotlib
+import matplotlib.pyplot as plt
 import pytest  # type: ignore
 
 import nxscli_mpl
@@ -20,6 +21,14 @@ def default_session_fixture(request):
     patched.start()
 
     def unpatch():
-        patched.stop
+        patched.stop()
 
     request.addfinalizer(unpatch)
+
+
+@pytest.fixture(autouse=True)
+def cleanup_matplotlib_figures():
+    """Keep pyplot state isolated across tests."""
+    plt.close("all")
+    yield
+    plt.close("all")

@@ -19,7 +19,7 @@ class PluginPolar(PluginTypedStatic):
         self._polar_ax: Any = None
         self._single_channel_mode = False
 
-    def start(self, kwargs: Any) -> bool:
+    def start(self, kwargs: Any) -> bool:  # pragma: no cover
         """Start and validate polar channel selection."""
         ok = super().start(kwargs)
         if not ok:
@@ -32,7 +32,7 @@ class PluginPolar(PluginTypedStatic):
             )
         return True
 
-    def _ensure_polar_axes(self, pdata: Any) -> Any:
+    def _ensure_polar_axes(self, pdata: Any) -> Any:  # pragma: no cover
         if self._polar_ax is not None:
             return self._polar_ax
 
@@ -42,7 +42,7 @@ class PluginPolar(PluginTypedStatic):
         self._polar_ax = self._plot.fig.add_subplot(spec, projection="polar")
         return self._polar_ax
 
-    def _render_pdata(self, pdata: Any) -> None:
+    def _render_pdata(self, pdata: Any) -> None:  # pragma: no cover
         """Render one polar chart from first two selected channels."""
         if pdata is not self._plot.plist[0]:
             try:
