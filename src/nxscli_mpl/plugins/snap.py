@@ -30,6 +30,13 @@ class PluginSnap(PluginThread, IPluginPlotStatic):
         self._plot: "PluginPlotMpl"
         self._write: str
 
+    def get_plot_handler(self) -> "PluginPlotMpl | None":
+        """Return the matplotlib plot handler.
+
+        :return: PluginPlotMpl instance, or None if start() has not been called
+        """
+        return getattr(self, "_plot", None)
+
     def _init(self) -> None:
         assert self._phandler
 
