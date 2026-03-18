@@ -232,6 +232,13 @@ class _PluginTypedWindowed(IPluginPlotDynamic):
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
 
+    def get_plot_handler(self) -> "PluginPlotMpl | None":
+        """Return the matplotlib plot handler.
+
+        :return: PluginPlotMpl instance, or None if start() has not been called
+        """
+        return getattr(self, "_plot", None)
+
     @property
     def stream(self) -> bool:
         return True
@@ -319,6 +326,13 @@ class _PluginXyWindowed(IPluginPlotDynamic):
     @classmethod
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
+
+    def get_plot_handler(self) -> "PluginPlotMpl | None":
+        """Return the matplotlib plot handler.
+
+        :return: PluginPlotMpl instance, or None if start() has not been called
+        """
+        return getattr(self, "_plot", None)
 
     @property
     def stream(self) -> bool:
@@ -559,6 +573,13 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
     @classmethod
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
+
+    def get_plot_handler(self) -> "PluginPlotMpl | None":
+        """Return the matplotlib plot handler.
+
+        :return: PluginPlotMpl instance, or None if start() has not been called
+        """
+        return getattr(self, "_plot", None)
 
     @property
     def stream(self) -> bool:
