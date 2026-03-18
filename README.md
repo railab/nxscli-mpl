@@ -14,7 +14,7 @@ Matplotlib extension to Nxscli.
   * static and streaming polar (`m_polar`, `m_polar_live`)
   * Matplotlib style configuration (`mpl`)
 
-## Instalation
+## Installation
 
 Nxscli-mpl can be installed by running `pip install nxscli-mpl`.
 
