@@ -1,18 +1,12 @@
 import pytest  # type: ignore
 
 from nxscli_mpl.animation_mpl import IPluginAnimation
-
-
-class DummyAni:
-    def __init__(self):
-        self.started = 0
-        self.stopped = 0
-
-    def start(self):
-        self.started += 1
-
-    def stop(self):
-        self.stopped += 1
+from tests.helpers import (
+    DummyAni,
+    FakePlot,
+    FakePluginHandler,
+    make_plot_kwargs,
+)
 
 
 class XTestPluginAnimation(IPluginAnimation):
@@ -21,25 +15,6 @@ class XTestPluginAnimation(IPluginAnimation):
 
     def _start(self, fig, pdata, qdata, kwargs):
         return DummyAni()
-
-
-class FakePlot:
-    def __init__(self, *, mode="detached"):
-        self.mode = mode
-        self.fig = object()
-        self.ani = []
-        self.plist = [object()] if mode else []
-        self.qdlist = [object()] if mode else []
-
-    def ani_clear(self):
-        self.ani = []
-
-    def ani_append(self, ani):
-        self.ani.append(ani)
-
-
-class FakePluginHandler:
-    pass
 
 
 def test_ipluginanimation_init():
@@ -75,7 +50,7 @@ def test_ipluginanimation_start_nochannels(mocker):
     show = mocker.patch("nxscli_mpl.animation_mpl.MplManager.show")
 
     # start
-    args = {"channels": [], "trig": [], "dpi": 100, "fmt": "", "write": False}
+    args = make_plot_kwargs(channels=[], fmt="", write=False)
     assert x.start(args) is True
 
     # clear
@@ -98,13 +73,7 @@ def test_ipluginanimation_start(mocker):
     )
 
     # start
-    args = {
-        "channels": [1],
-        "trig": [],
-        "dpi": 100,
-        "fmt": [""],
-        "write": False,
-    }
+    args = make_plot_kwargs()
     assert x.start(args) is True
 
     # get_plot_handler returns the PluginPlotMpl after start
@@ -135,14 +104,7 @@ def test_ipluginanimation_result_attached(mocker):
     )
     show = mocker.patch("nxscli_mpl.animation_mpl.MplManager.show")
 
-    args = {
-        "channels": [1],
-        "trig": [],
-        "dpi": 100,
-        "fmt": [""],
-        "write": False,
-        "plot_mode": "attached",
-    }
+    args = make_plot_kwargs(plot_mode="attached")
     assert x.start(args) is True
     ret = x.result()
     assert ret is plot

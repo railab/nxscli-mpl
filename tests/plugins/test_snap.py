@@ -4,6 +4,11 @@ from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.plot_mpl import PlotDataCommon
 from nxscli_mpl.plugins.snap import PluginSnap
+from tests.helpers import (
+    DummyStaticPlot,
+    DummyStaticPlotData,
+    make_plot_kwargs,
+)
 
 
 def test_plugincapture_init():
@@ -135,36 +140,16 @@ def test_plugincapture_result_detached_shows_figure_and_finalizes(
 
 
 def test_plugincapture_start_uses_build_plot_surface(mocker) -> None:
-    class DummyPlotData:
-        def __init__(self) -> None:
-            self.xlim = None
-
-        def set_xlim(self, xlim) -> None:
-            self.xlim = xlim
-
-    class DummyPlot:
-        def __init__(self) -> None:
-            self.plist = [DummyPlotData()]
-            self.qdlist = [object()]
-
     plugin = PluginSnap()
     plugin.connect_phandler(object())
-    plot = DummyPlot()
+    plot = DummyStaticPlot(pdata=DummyStaticPlotData(ydata=[]))
     build = mocker.patch(
         "nxscli_mpl.plugins.snap.build_plot_surface", return_value=plot
     )
     thread_start = mocker.patch.object(plugin, "thread_start")
 
     out = plugin.start(
-        {
-            "samples": 8,
-            "write": "snap.png",
-            "nostop": True,
-            "channels": [1],
-            "trig": [],
-            "dpi": 100,
-            "fmt": [""],
-        }
+        make_plot_kwargs(samples=8, write="snap.png", nostop=True)
     )
 
     assert out is True

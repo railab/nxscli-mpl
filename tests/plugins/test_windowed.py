@@ -15,6 +15,12 @@ from nxscli_mpl.plugins._typed_windowed import (
 from nxscli_mpl.plugins.fft import PluginFft
 from nxscli_mpl.plugins.polar import PluginPolar
 from nxscli_mpl.plugins.xy import PluginXy
+from tests.helpers import (
+    DummyStaticPlot,
+    FakePlot,
+    StopTrackingAni,
+    make_plot_kwargs,
+)
 
 
 def test_windowed_get_inputhook(monkeypatch) -> None:
@@ -105,38 +111,16 @@ def test_polar_windowed_get_plot_handler_after_set() -> None:
 
 
 def test_typed_static_start_uses_build_plot_surface(mocker) -> None:
-    class DummyPlotData:
-        def __init__(self) -> None:
-            self.xlim = None
-            self.ydata = [[0.0], [1.0]]
-            self.set_xlim = lambda xlim: setattr(self, "xlim", xlim)
-
-    class DummyPlot:
-        def __init__(self) -> None:
-            self.plist = [DummyPlotData()]
-            self.qdlist = [object()]
-
     plugin = PluginXy()
     plugin.connect_phandler(object())
-    plot = DummyPlot()
+    plot = DummyStaticPlot()
     build = mocker.patch(
         "nxscli_mpl.plugins._typed_static.build_plot_surface",
         return_value=plot,
     )
     thread_start = mocker.patch.object(plugin, "thread_start")
 
-    out = plugin.start(
-        {
-            "samples": 16,
-            "write": "",
-            "nostop": False,
-            "bins": 12,
-            "channels": [1],
-            "trig": [],
-            "dpi": 100,
-            "fmt": [""],
-        }
-    )
+    out = plugin.start(make_plot_kwargs(samples=16, nostop=False, bins=12))
 
     assert out is True
     build.assert_called_once_with(plugin._phandler, mocker.ANY)
@@ -178,54 +162,25 @@ def test_typed_static_handle_blocks_updates_data_and_finalizes(
 def test_typed_windowed_start_and_result_use_common_plot_surface(
     mocker,
 ) -> None:
-    class DummyAni:
-        def __init__(self, *args, **kwargs) -> None:
-            self.args = args
-            self.kwargs = kwargs
-            self.started = 0
-
-        def start(self) -> None:
-            self.started += 1
-
-        def stop(self) -> None:
-            self.started -= 1
-
-    class DummyPlot:
-        def __init__(self, mode="detached") -> None:
-            self.mode = mode
-            self.fig = object()
-            self.plist = [object()]
-            self.qdlist = [object()]
-            self.ani = []
-
-        def ani_clear(self) -> None:
-            self.ani = []
-
-        def ani_append(self, ani) -> None:
-            self.ani.append(ani)
-
     plugin = PluginFftStream()
     plugin.connect_phandler(object())
-    plot = DummyPlot()
+    plot = FakePlot()
     build = mocker.patch.object(
         typed_windowed, "build_plot_surface", return_value=plot
     )
-    mocker.patch.object(typed_windowed, "_WindowedTypedAnimation", DummyAni)
+    mocker.patch.object(
+        typed_windowed, "_WindowedTypedAnimation", StopTrackingAni
+    )
     show = mocker.patch.object(typed_windowed.MplManager, "show")
 
     out = plugin.start(
-        {
-            "channels": [1],
-            "trig": [],
-            "dpi": 100,
-            "fmt": [""],
-            "write": "",
-            "window": 32,
-            "hop": 8,
-            "bins": 4,
-            "window_fn": "hann",
-            "range_mode": "auto",
-        }
+        make_plot_kwargs(
+            window=32,
+            hop=8,
+            bins=4,
+            window_fn="hann",
+            range_mode="auto",
+        )
     )
 
     assert out is True
