@@ -5,15 +5,8 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 from matplotlib.animation import FuncAnimation
 from nxscli.logger import logger
-from nxscli.transforms.models import (
-    FftResult,
-    HistogramResult,
-    PolarResult,
-    XyResult,
-)
+from nxscli.transforms.models import PolarResult, XyResult
 from nxscli.transforms.operators_window import (
-    fft_spectrum,
-    histogram_counts,
     polar_relation,
     xy_relation,
 )
@@ -25,6 +18,10 @@ from nxscli.transforms.pipeline import (
 
 from nxscli_mpl.animation_mpl import _create_matplotlib_inputhook
 from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
+from nxscli_mpl.plugins._typed_windowed_strategies import (
+    WindowedTransformState,
+    get_windowed_transform_strategy,
+)
 from nxscli_mpl.plugins._windowed_common import (
     _PluginAnimationListWindowedBase,
     _PluginFuncAnimationWindowedBase,
@@ -63,6 +60,8 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         self._bins = max(1, int(bins))
         self._window_fn = str(window_fn)
         self._range_mode = str(range_mode)
+        self._strategy = get_windowed_transform_strategy(plot_type)
+        self._strategy_state = WindowedTransformState()
         self._pipeline = TransformPipeline(max_points=self._window)
         self._proc_names: list[str] = []
         for i, _ in enumerate(pdata.lns):
@@ -77,9 +76,6 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
                     fn=self._processor_fn,
                 )
             )
-        self._fft_xmax: float | None = None
-        self._ymax_locked: float | None = None
-        self._hist_range: tuple[float, float] | None = None
         pdata.samples_max = self._window
 
     def start(self) -> None:  # pragma: no cover
@@ -109,117 +105,23 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         }
         outputs = self._pipeline.ingest(batch)
 
-        if self._plot_type == "fft":
-            self._update_fft(pdata, outputs)
-        else:
-            self._update_hist(pdata, outputs)
+        self._strategy.update_plot(
+            pdata,
+            outputs,
+            proc_names=self._proc_names,
+            state=self._strategy_state,
+        )
 
         return pdata.lns
 
     def _processor_fn(self, window: np.ndarray) -> object:  # pragma: no cover
-        if self._plot_type == "fft":
-            return fft_spectrum(window, window_fn=self._window_fn)
-
-        mode, value_range = self._hist_mode()
-
-        return histogram_counts(
+        return self._strategy.processor(
             window,
             bins=self._bins,
-            range_mode=mode,
-            value_range=value_range,
+            window_fn=self._window_fn,
+            range_mode=self._range_mode,
+            state=self._strategy_state,
         )
-
-    def _hist_mode(  # pragma: no cover
-        self,
-    ) -> tuple[str, tuple[float, float] | None]:
-        if self._range_mode == "fixed":
-            return "fixed", self._hist_range
-        if self._hist_range is None:
-            return "auto", None
-        return "fixed", self._hist_range
-
-    def _lock_axis(  # pragma: no cover
-        self, pdata: "PlotDataAxesMpl", xmax: float | None, ymax: float
-    ) -> None:
-        ymax_safe = max(1e-9, float(ymax))
-        if self._ymax_locked is None:
-            self._ymax_locked = ymax_safe
-        else:
-            prev = self._ymax_locked
-            if ymax_safe > prev:
-                self._ymax_locked = 0.85 * prev + 0.15 * ymax_safe
-            else:
-                self._ymax_locked = max(ymax_safe, prev * 0.995)
-
-        if xmax is not None:
-            pdata.ax.set_xlim(0.0, float(xmax))
-        pdata.ax.set_ylim(0.0, float(self._ymax_locked) * 1.08)
-
-    def _update_fft(  # pragma: no cover
-        self, pdata: "PlotDataAxesMpl", outputs: dict[str, object]
-    ) -> None:
-        ymax = 0.0
-        for i, line in enumerate(pdata.lns):
-            raw = outputs.get(self._proc_names[i])
-            if raw is None:
-                continue
-            if not isinstance(raw, FftResult):
-                continue
-            res = raw
-            line.set_data(res.freq.tolist(), res.amplitude.tolist())
-            if int(res.freq.size) > 0:
-                self._fft_xmax = float(res.freq[-1])
-            if int(res.amplitude.size) > 0:
-                ymax = max(ymax, float(np.max(res.amplitude)))
-        self._lock_axis(pdata, self._fft_xmax, ymax)
-
-    def _update_hist(  # pragma: no cover
-        self, pdata: "PlotDataAxesMpl", outputs: dict[str, object]
-    ) -> None:
-        updates: list[tuple[np.ndarray, np.ndarray]] = []
-        for name in self._proc_names:
-            raw = outputs.get(name)
-            if raw is None:
-                continue
-            if not isinstance(raw, HistogramResult):
-                continue
-            res = raw
-            updates.append((res.counts, res.edges))
-
-        if not updates:
-            return
-
-        if self._hist_range is None and len(updates) > 0:
-            first_edges = updates[0][1]
-            if int(first_edges.size) >= 2:
-                self._hist_range = (
-                    float(first_edges[0]),
-                    float(first_edges[-1]),
-                )
-
-        ymax = self._draw_histogram(pdata, updates)
-        pdata.ax.set_title("Histogram Stream")
-        if self._hist_range is not None:
-            pdata.ax.set_xlim(self._hist_range[0], self._hist_range[1])
-        self._lock_axis(pdata, None, ymax)
-
-    def _draw_histogram(  # pragma: no cover
-        self,
-        pdata: "PlotDataAxesMpl",
-        updates: list[tuple[np.ndarray, np.ndarray]],
-    ) -> float:
-        pdata.ax.cla()
-        ymax = 0.0
-        for i, (counts, edges) in enumerate(updates):
-            if int(edges.size) < 2:
-                continue
-            centers = edges[:-1]
-            widths = np.diff(edges)
-            alpha = 0.6 if i == 0 else 0.35
-            pdata.ax.bar(centers, counts, width=widths, alpha=alpha)
-            if int(counts.size) > 0:
-                ymax = max(ymax, float(np.max(counts)))
-        return ymax
 
 
 class _PluginTypedWindowed(_PluginAnimationListWindowedBase):
