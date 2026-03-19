@@ -7,12 +7,17 @@ from nxslib.nxscope import DNxscopeStreamBlock
 import nxscli_mpl.plugins._typed_windowed as typed_windowed
 import nxscli_mpl.plugins._windowed_common as windowed_common
 from nxscli_mpl.plot_mpl import PlotDataCommon
+from nxscli_mpl.plugins._typed_static_strategies import get_static_strategy
 from nxscli_mpl.plugins._typed_windowed import (
     PluginFftStream,
     PluginHistStream,
     PluginPolarStream,
     PluginXyStream,
     _WindowedTypedAnimation,
+)
+from nxscli_mpl.plugins._typed_windowed_strategies import (
+    WindowedTransformState,
+    get_windowed_transform_strategy,
 )
 from nxscli_mpl.plugins.fft import PluginFft
 from nxscli_mpl.plugins.polar import PluginPolar
@@ -222,6 +227,7 @@ def test_windowed_animation_init_sets_pipeline_defaults() -> None:
     assert ani._hop == 3
     assert ani._bins == 1
     assert ani._proc_names == ["curve0", "curve1"]
+    assert ani._strategy is get_windowed_transform_strategy("histogram")
     assert pdata.samples_max == 2
 
 
@@ -230,6 +236,242 @@ def test_xy_and_polar_plugins_init() -> None:
     polar = PluginPolar()
     assert polar._single_channel_mode is False
     assert polar._polar_ax is None
+
+
+def test_static_strategies_cover_timeseries_fft_and_xy() -> None:
+    timeseries = get_static_strategy("timeseries")
+    xvals, yvals = timeseries.build_xy([[1.0, 2.0]], samples=8, hist_bins=4)
+    assert xvals == [[0.0, 1.0]]
+    assert yvals == [[1.0, 2.0]]
+    assert timeseries.render(object(), [], samples=8, hist_bins=4) is False
+
+    fft = get_static_strategy("fft")
+    xvals, yvals = fft.build_xy(
+        [[1.0, 0.0, -1.0, 0.0]], samples=8, hist_bins=4
+    )
+    assert len(xvals) == 1
+    assert len(yvals) == 1
+    assert fft.render(object(), [], samples=8, hist_bins=4) is False
+
+    xy = get_static_strategy("xy")
+    xvals, yvals = xy.build_xy(
+        [[1.0, 2.0], [3.0, 4.0]], samples=8, hist_bins=4
+    )
+    assert xvals == [[1.0, 2.0]]
+    assert yvals == [[3.0, 4.0]]
+    assert xy.render(object(), [], samples=8, hist_bins=4) is False
+    assert get_static_strategy("unknown") is timeseries
+
+
+def test_static_histogram_strategy_renders_bars() -> None:
+    class DummyAxes:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, object]] = []
+
+        def cla(self) -> None:
+            self.calls.append(("cla", None))
+
+        def bar(self, centers, counts, width, alpha) -> None:
+            self.calls.append(("bar", (list(centers), list(counts), alpha)))
+
+        def set_title(self, title: str) -> None:
+            self.calls.append(("title", title))
+
+        def relim(self) -> None:
+            self.calls.append(("relim", None))
+
+        def autoscale_view(self) -> None:
+            self.calls.append(("autoscale", None))
+
+    pdata = type("P", (), {"ax": DummyAxes()})()
+    histogram = get_static_strategy("histogram")
+    xvals, yvals = histogram.build_xy(
+        [[1.0, 2.0, 3.0]], samples=8, hist_bins=2
+    )
+    assert len(xvals) == 1
+    assert len(yvals) == 1
+    handled = histogram.render(
+        pdata,
+        [[1.0, 2.0, 3.0]],
+        samples=8,
+        hist_bins=2,
+    )
+    assert handled is True
+    assert [entry[0] for entry in pdata.ax.calls] == [
+        "cla",
+        "bar",
+        "title",
+        "relim",
+        "autoscale",
+    ]
+
+
+def test_static_strategies_cover_empty_and_fallback_paths() -> None:
+    fft = get_static_strategy("fft")
+    xvals, yvals = fft.build_xy([[]], samples=8, hist_bins=4)
+    assert xvals == [[]]
+    assert yvals == [[]]
+
+    histogram = get_static_strategy("histogram")
+    xvals, yvals = histogram.build_xy([[]], samples=8, hist_bins=2)
+    assert xvals == [[]]
+    assert yvals == [[]]
+
+    class DummyAxes:
+        def cla(self) -> None:
+            pass
+
+        def bar(self, centers, counts, width, alpha) -> None:
+            raise AssertionError("no bars expected")
+
+        def set_title(self, title: str) -> None:
+            pass
+
+        def relim(self) -> None:
+            pass
+
+        def autoscale_view(self) -> None:
+            pass
+
+    assert histogram.render(
+        type("P", (), {"ax": DummyAxes()})(),
+        [[]],
+        samples=8,
+        hist_bins=2,
+    )
+
+    xy = get_static_strategy("xy")
+    xvals, yvals = xy.build_xy([[1.0]], samples=8, hist_bins=4)
+    assert xvals == [[0.0]]
+    assert yvals == [[1.0]]
+
+
+def test_fft_windowed_strategy_updates_lines_and_axes() -> None:
+    fft = get_windowed_transform_strategy("fft")
+    fft_state = WindowedTransformState()
+    fft_result = fft.processor(
+        np.asarray([1.0, 0.0, -1.0, 0.0], dtype=np.float64),
+        bins=4,
+        window_fn="hann",
+        range_mode="auto",
+        state=fft_state,
+    )
+    assert fft_result.freq.size >= 0
+
+    class DummyLine:
+        def __init__(self) -> None:
+            self.data: tuple[list[float], list[float]] = ([], [])
+
+        def set_data(self, xs, ys) -> None:  # pragma: no cover
+            self.data = (list(xs), list(ys))
+
+    class DummyAxes:
+        def __init__(self) -> None:
+            self.xlim = None
+            self.ylim = None
+
+        def set_xlim(self, left: float, right: float) -> None:
+            self.xlim = (left, right)
+
+        def set_ylim(self, low: float, high: float) -> None:
+            self.ylim = (low, high)
+
+    pdata = type("P", (), {"lns": [DummyLine()], "ax": DummyAxes()})()
+    fft.update_plot(
+        pdata,
+        {"curve0": fft_result},
+        proc_names=["curve0"],
+        state=fft_state,
+    )
+    assert pdata.lns[0].data[0]
+    assert pdata.ax.ylim is not None
+    fft.update_plot(pdata, {}, proc_names=["curve0"], state=fft_state)
+
+
+def test_hist_windowed_strategy_updates_axes_and_fixed_mode() -> None:
+    histogram = get_windowed_transform_strategy("histogram")
+    hist_state = WindowedTransformState()
+
+    class DummyLine:
+        def __init__(self) -> None:
+            self.data: tuple[list[float], list[float]] = ([], [])
+
+        def set_data(self, xs, ys) -> None:  # pragma: no cover
+            self.data = (list(xs), list(ys))
+
+    class DummyAxes:
+        def __init__(self) -> None:
+            self.xlim = None
+            self.ylim = None
+            self.calls: list[str] = []
+
+        def set_xlim(self, left: float, right: float) -> None:
+            self.xlim = (left, right)
+
+        def set_ylim(self, low: float, high: float) -> None:
+            self.ylim = (low, high)
+
+        def cla(self) -> None:
+            self.calls.append("cla")
+
+        def bar(self, centers, counts, width, alpha) -> None:
+            self.calls.append("bar")
+
+        def set_title(self, title: str) -> None:
+            self.calls.append(title)
+
+    pdata = type("P", (), {"lns": [DummyLine()], "ax": DummyAxes()})()
+    hist_result = histogram.processor(
+        np.asarray([1.0, 2.0, 3.0, 4.0], dtype=np.float64),
+        bins=2,
+        window_fn="hann",
+        range_mode="auto",
+        state=hist_state,
+    )
+    histogram.update_plot(
+        pdata,
+        {"curve0": hist_result},
+        proc_names=["curve0"],
+        state=hist_state,
+    )
+    assert hist_state.hist_range is not None
+    assert pdata.ax.calls == ["cla", "bar", "Histogram Stream"]
+    histogram.processor(
+        np.asarray([1.0, 2.0], dtype=np.float64),
+        bins=2,
+        window_fn="hann",
+        range_mode="fixed",
+        state=hist_state,
+    )
+    histogram.update_plot(pdata, {}, proc_names=["curve0"], state=hist_state)
+
+
+def test_windowed_strategy_handles_empty_outputs() -> None:
+    fft = get_windowed_transform_strategy("fft")
+    state = WindowedTransformState(ymax_locked=2.0)
+    pdata = type(
+        "P",
+        (),
+        {
+            "lns": [type("L", (), {"set_data": lambda self, xs, ys: None})()],
+            "ax": type(
+                "A",
+                (),
+                {
+                    "xlim": None,
+                    "ylim": None,
+                    "set_xlim": lambda self, left, right: setattr(
+                        self, "xlim", (left, right)
+                    ),
+                    "set_ylim": lambda self, low, high: setattr(
+                        self, "ylim", (low, high)
+                    ),
+                },
+            )(),
+        },
+    )()
+    fft.update_plot(pdata, {}, proc_names=["curve0"], state=state)
+    assert pdata.ax.ylim is not None
 
 
 def test_windowed_common_reads_stream_blocks() -> None:
