@@ -7,7 +7,11 @@ from nxscli.iplugin import IPluginPlotStatic
 from nxscli.logger import logger
 from nxscli.pluginthr import PluginThread
 
-from nxscli_mpl.plot_mpl import MplManager, PluginPlotMpl
+from nxscli_mpl.plot_mpl import (
+    MplManager,
+    PluginPlotMpl,
+    build_plot_surface,
+)
 
 if TYPE_CHECKING:
     from nxscli.idata import PluginQueueData
@@ -83,19 +87,7 @@ class PluginSnap(PluginThread, IPluginPlotStatic):
         self._write = kwargs["write"]
         self._nostop = kwargs["nostop"]
 
-        chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
-        trig = self._phandler.triggers_plugin(chanlist, kwargs["trig"])
-
-        cb = self._phandler.cb_get()
-        self._plot = PluginPlotMpl(
-            chanlist,
-            trig,
-            cb,
-            dpi=kwargs["dpi"],
-            fmt=kwargs["fmt"],
-            mode=str(kwargs.get("plot_mode", "detached")),
-            parent=kwargs.get("plot_parent"),
-        )
+        self._plot = build_plot_surface(self._phandler, kwargs)
 
         if not self._plot.qdlist or not self._plot.plist:  # pragma: no cover
             return False

@@ -30,6 +30,7 @@ from nxscli_mpl.plot_mpl import (
     MplManager,
     PluginAnimationCommonMpl,
     PluginPlotMpl,
+    build_plot_surface,
 )
 
 if TYPE_CHECKING:
@@ -268,18 +269,7 @@ class _PluginTypedWindowed(IPluginPlotDynamic):
         assert self._phandler
         logger.info("start %s stream %s", self.plot_type, str(kwargs))
 
-        chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
-        trig = self._phandler.triggers_plugin(chanlist, kwargs["trig"])
-        cb = self._phandler.cb_get()
-        self._plot = PluginPlotMpl(
-            chanlist,
-            trig,
-            cb,
-            dpi=kwargs["dpi"],
-            fmt=kwargs["fmt"],
-            mode=str(kwargs.get("plot_mode", "detached")),
-            parent=kwargs.get("plot_parent"),
-        )
+        self._plot = build_plot_surface(self._phandler, kwargs)
         self.clear()
 
         for i, pdata in enumerate(self._plot.plist):
@@ -359,17 +349,7 @@ class _PluginXyWindowed(IPluginPlotDynamic):
         chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
         if len(chanlist) < 1:
             raise ValueError("xy_stream requires at least one channel")
-        trig = self._phandler.triggers_plugin(chanlist, kwargs["trig"])
-        cb = self._phandler.cb_get()
-        self._plot = PluginPlotMpl(
-            chanlist,
-            trig,
-            cb,
-            dpi=kwargs["dpi"],
-            fmt=kwargs["fmt"],
-            mode=str(kwargs.get("plot_mode", "detached")),
-            parent=kwargs.get("plot_parent"),
-        )
+        self._plot = build_plot_surface(self._phandler, kwargs)
         self._window = max(2, int(kwargs["window"]))
         self._hop = max(1, int(kwargs.get("hop", 0) or (self._window // 4)))
         self._align_policy = str(kwargs.get("align_policy", "truncate"))
@@ -638,17 +618,7 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
         chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
         if len(chanlist) < 1:
             raise ValueError("polar_stream requires at least one channel")
-        trig = self._phandler.triggers_plugin(chanlist, kwargs["trig"])
-        cb = self._phandler.cb_get()
-        self._plot = PluginPlotMpl(
-            chanlist,
-            trig,
-            cb,
-            dpi=kwargs["dpi"],
-            fmt=kwargs["fmt"],
-            mode=str(kwargs.get("plot_mode", "detached")),
-            parent=kwargs.get("plot_parent"),
-        )
+        self._plot = build_plot_surface(self._phandler, kwargs)
         self._window = max(2, int(kwargs["window"]))
         self._hop = max(1, int(kwargs.get("hop", 0) or (self._window // 4)))
         self._align_policy = str(kwargs.get("align_policy", "truncate"))

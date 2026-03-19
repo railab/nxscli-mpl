@@ -726,8 +726,11 @@ class PluginPlotMpl(PluginData):
 
     def ani_clear(self) -> None:  # pragma: no cover
         """Clear animations."""
-        # TODO: fix me, doesnt work
-        del self._ani
+        for ani in self._ani:
+            try:
+                ani.stop()
+            except Exception:
+                pass
         self._ani = []
 
     def plot_clear(self) -> None:
@@ -853,4 +856,23 @@ def create_plot_surface(
         fmt=fmt,
         mode=mode,
         parent=parent,
+    )
+
+
+def build_plot_surface(
+    phandler: Any,
+    kwargs: dict[str, Any],
+) -> PluginPlotMpl:
+    """Build plot surface from plugin handler and runtime kwargs."""
+    chanlist = phandler.chanlist_plugin(kwargs["channels"])
+    trig = phandler.triggers_plugin(chanlist, kwargs["trig"])
+    cb = phandler.cb_get()
+    return create_plot_surface(
+        chanlist=chanlist,
+        trig=trig,
+        cb=cb,
+        dpi=kwargs["dpi"],
+        fmt=kwargs["fmt"],
+        mode=str(kwargs.get("plot_mode", "detached")),
+        parent=kwargs.get("plot_parent"),
     )

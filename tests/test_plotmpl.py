@@ -15,7 +15,6 @@ from nxscli_mpl.plot_mpl import (
     PlotDataCommon,
     PluginAnimationCommonMpl,
     PluginPlotMpl,
-    create_plot_surface,
 )
 
 
@@ -109,16 +108,25 @@ def dummy_stream_unsub(q):
     pass
 
 
+def make_plot(chanlist, mode="detached", fmt=None):
+    """Create a test plot with default callback and triggers."""
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    trig = [
+        TriggerHandler(chan.data.chan, dtc)
+        for chan in chanlist
+        if chan.data.is_numerical
+    ]
+    cb = PluginDataCb(dummy_stream_sub, dummy_stream_unsub)
+    return PluginPlotMpl(chanlist, trig, cb, mode=mode, fmt=fmt)
+
+
 def test_pluginplotmpl():
     chanlist = [
         DeviceChannel(chan=0, _type=1, vdim=2, name="chan0"),  # not numerical
         DeviceChannel(chan=1, _type=2, vdim=1, name="chan1"),
         DeviceChannel(chan=2, _type=2, vdim=2, name="chan2"),
     ]
-    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
-    trig = [TriggerHandler(1, dtc), TriggerHandler(2, dtc)]
-    cb = PluginDataCb(dummy_stream_sub, dummy_stream_unsub)
-    x = PluginPlotMpl(chanlist, trig, cb)
+    x = make_plot(chanlist)
 
     assert x.fig is not None
     assert x.ani == []
@@ -127,21 +135,48 @@ def test_pluginplotmpl():
     assert x._fmt == [None, None]
 
     # test fmt configuration
-    x = PluginPlotMpl(chanlist, trig, cb, fmt="o")
+    x = make_plot(chanlist, fmt="o")
     assert x._fmt == [["o"], ["o", "o"]]
 
-    x = PluginPlotMpl(chanlist, trig, cb, fmt=[["o"], ["b", "b"]])
+    x = make_plot(chanlist, fmt=[["o"], ["b", "b"]])
     assert x._fmt == [["o"], ["b", "b"]]
 
     # invalid vector fmt for chan 2
     with pytest.raises(AssertionError):
-        x = PluginPlotMpl(chanlist, trig, cb, fmt=["o", "b"])
+        x = make_plot(chanlist, fmt=["o", "b"])
     # invalid channels fmt
     with pytest.raises(AssertionError):
-        x = PluginPlotMpl(chanlist, trig, cb, fmt=["o", "b", "c"])
+        x = make_plot(chanlist, fmt=["o", "b", "c"])
 
     # TODO
 
+    TriggerHandler.cls_cleanup()
+
+
+def test_pluginplotmpl_ani_clear_stops_handlers() -> None:
+    """Animation cleanup should stop registered handlers before clearing."""
+    chanlist = [DeviceChannel(chan=1, _type=2, vdim=1, name="chan1")]
+    plot = make_plot(chanlist, mode="attached")
+
+    class DummyAni:
+        def __init__(self) -> None:
+            self.stop_calls = 0
+
+        def stop(self) -> None:
+            self.stop_calls += 1
+
+    ani1 = DummyAni()
+    ani2 = DummyAni()
+    plot.ani_append(ani1)  # type: ignore[arg-type]
+    plot.ani_append(ani2)  # type: ignore[arg-type]
+
+    plot.ani_clear()
+
+    assert ani1.stop_calls == 1
+    assert ani2.stop_calls == 1
+    assert plot.ani == []
+
+    plot.close()
     TriggerHandler.cls_cleanup()
 
 
@@ -268,10 +303,7 @@ def test_plot_mode_and_factory_attached():
     assert EPlotMode.from_text("invalid") is EPlotMode.DETACHED
 
     chanlist = [DeviceChannel(chan=1, _type=2, vdim=1, name="chan1")]
-    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
-    trig = [TriggerHandler(1, dtc)]
-    cb = PluginDataCb(dummy_stream_sub, dummy_stream_unsub)
-    plot = create_plot_surface(chanlist, trig, cb, mode="attached")
+    plot = make_plot(chanlist, mode="attached")
     assert isinstance(plot, PluginPlotMpl)
     assert plot.mode == "attached"
     assert plot.widget is not None or plot.widget is None

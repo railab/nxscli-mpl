@@ -11,6 +11,7 @@ from nxscli_mpl.plot_mpl import (
     PlotDataAxesMpl,
     PluginAnimationCommonMpl,
     PluginPlotMpl,
+    build_plot_surface,
 )
 
 if TYPE_CHECKING:
@@ -142,19 +143,7 @@ class IPluginAnimation(IPluginPlotDynamic):
 
         logger.info("start %s", str(kwargs))
 
-        chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
-        trig = self._phandler.triggers_plugin(chanlist, kwargs["trig"])
-
-        cb = self._phandler.cb_get()
-        self._plot = PluginPlotMpl(
-            chanlist,
-            trig,
-            cb,
-            dpi=kwargs["dpi"],
-            fmt=kwargs["fmt"],
-            mode=str(kwargs.get("plot_mode", "detached")),
-            parent=kwargs.get("plot_parent"),
-        )
+        self._plot = build_plot_surface(self._phandler, kwargs)
 
         # clear previous animations
         self.clear()
