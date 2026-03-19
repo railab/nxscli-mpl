@@ -115,7 +115,7 @@ def test_typed_static_start_uses_build_plot_surface(mocker) -> None:
     plugin.connect_phandler(object())
     plot = DummyStaticPlot()
     build = mocker.patch(
-        "nxscli_mpl.plugins._typed_static.build_plot_surface",
+        "nxscli_mpl.plugins._static_common.build_plot_surface",
         return_value=plot,
     )
     thread_start = mocker.patch.object(plugin, "thread_start")
