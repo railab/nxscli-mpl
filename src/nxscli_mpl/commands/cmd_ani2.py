@@ -6,6 +6,7 @@ import click
 from nxscli.cli.environment import Environment, pass_environment
 
 from nxscli_mpl.cli.types import plot_options
+from nxscli_mpl.commands._common import enable_plot_command
 
 if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
@@ -30,12 +31,8 @@ def cmd_m_roll(
     write: str,
 ) -> bool:
     """[plugin] Animation plot with a lenght limit (saturated X-axis)."""
-    assert ctx.phandler
-    if maxsamples == 0:  # pragma: no cover
-        click.secho("ERROR: Missing argument MAXSAMPLES", err=True, fg="red")
-        return False
-
-    ctx.phandler.enable(
+    return enable_plot_command(
+        ctx,
         "m_roll",
         maxsamples=maxsamples,
         channels=chan,
@@ -44,7 +41,3 @@ def cmd_m_roll(
         fmt=fmt,
         write=write,
     )
-
-    ctx.needchannels = True
-
-    return True

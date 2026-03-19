@@ -7,6 +7,7 @@ from nxscli.cli.environment import Environment, pass_environment
 from nxscli.cli.types import Samples
 
 from nxscli_mpl.cli.types import plot_options
+from nxscli_mpl.commands._common import enable_plot_command
 
 if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
@@ -26,11 +27,8 @@ def cmd_pfft(
     write: str,
 ) -> bool:
     """[plugin] Static FFT plot for a given number of samples."""
-    assert ctx.phandler
-    if samples == 0:  # pragma: no cover
-        ctx.waitenter = True
-
-    ctx.phandler.enable(
+    return enable_plot_command(
+        ctx,
         "m_fft",
         samples=samples,
         channels=chan,
@@ -38,8 +36,4 @@ def cmd_pfft(
         dpi=dpi,
         fmt=fmt,
         write=write,
-        nostop=ctx.waitenter,
     )
-
-    ctx.needchannels = True
-    return True

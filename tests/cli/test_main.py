@@ -201,6 +201,17 @@ def test_main_dispatch_xy_special_channels(runner, enable_plugin):
     assert patched.call_args.kwargs["channels"] is None
 
 
+def test_main_dispatch_m_snap_interactive(runner, enable_plugin):
+    patched = enable_plugin
+    args = ["dummy", "chan", "1", "m_snap", "i"]
+    result = runner.invoke(main, args)
+    assert result.exit_code == 0
+    assert patched.call_count == 1
+    assert patched.call_args.args[1] == "m_snap"
+    assert patched.call_args.kwargs["samples"] == -1
+    assert "nostop" not in patched.call_args.kwargs
+
+
 def test_main_trig_mpl(runner):
     args = ["dummy", "chan", "1", "trig", "xxx", "m_roll", "1"]
     result = runner.invoke(main, args)
