@@ -144,7 +144,8 @@ def test_plugincapture_start_uses_build_plot_surface(mocker) -> None:
     plugin.connect_phandler(object())
     plot = DummyStaticPlot(pdata=DummyStaticPlotData(ydata=[]))
     build = mocker.patch(
-        "nxscli_mpl.plugins.snap.build_plot_surface", return_value=plot
+        "nxscli_mpl.plugins._static_common.build_plot_surface",
+        return_value=plot,
     )
     thread_start = mocker.patch.object(plugin, "thread_start")
 
@@ -157,3 +158,68 @@ def test_plugincapture_start_uses_build_plot_surface(mocker) -> None:
     thread_start.assert_called_once_with(plot)
     assert plugin._write == "snap.png"
     assert plot.plist[0].xlim == (0, 8)
+
+
+def test_plugincapture_start_with_zero_samples_keeps_default_xlim(
+    mocker,
+) -> None:
+    plugin = PluginSnap()
+    plugin.connect_phandler(object())
+    plot = DummyStaticPlot(pdata=DummyStaticPlotData(ydata=[]))
+    build = mocker.patch(
+        "nxscli_mpl.plugins._static_common.build_plot_surface",
+        return_value=plot,
+    )
+    thread_start = mocker.patch.object(plugin, "thread_start")
+
+    out = plugin.start(make_plot_kwargs(samples=0, nostop=False))
+
+    assert out is True
+    build.assert_called_once_with(plugin._phandler, mocker.ANY)
+    thread_start.assert_called_once_with(plot)
+    assert plot.plist[0].xlim is None
+
+
+def test_plugincapture_start_returns_false_for_empty_plot(mocker) -> None:
+    class EmptyPlot:
+        plist: list[object] = []
+        qdlist: list[object] = []
+
+    plugin = PluginSnap()
+    plugin.connect_phandler(object())
+    build = mocker.patch(
+        "nxscli_mpl.plugins._static_common.build_plot_surface",
+        return_value=EmptyPlot(),
+    )
+    thread_start = mocker.patch.object(plugin, "thread_start")
+
+    out = plugin.start(make_plot_kwargs(samples=0, nostop=False))
+
+    assert out is False
+    build.assert_called_once_with(plugin._phandler, mocker.ANY)
+    thread_start.assert_not_called()
+
+
+def test_plugincapture_result_saves_when_write_set(mocker) -> None:
+    class DummyPlotData:
+        def plot(self) -> None:
+            return
+
+    class DummyFigure:
+        def __init__(self) -> None:
+            self.savefig = mocker.Mock()
+
+    class DummyPlot:
+        def __init__(self) -> None:
+            self.mode = "attached"
+            self.plist = [DummyPlotData()]
+            self.fig = DummyFigure()
+
+    plugin = PluginSnap()
+    plugin._plot = DummyPlot()
+    plugin._write = "snap.png"
+
+    out = plugin.result()
+
+    assert out is plugin._plot
+    plugin._plot.fig.savefig.assert_called_once_with("snap.png")
