@@ -95,7 +95,7 @@ def test_mplmanager_func_animation_delegates(mocker) -> None:
     func = mocker.Mock()
     frames = mocker.Mock(return_value=iter([1]))
     create = mocker.patch(
-        "nxscli_mpl.plot_mpl.FuncAnimation", return_value="ani"
+        "nxscli_mpl._mpl_manager.FuncAnimation", return_value="ani"
     )
 
     out = MplManager.func_animation(fig=fig, func=func, frames=frames)
