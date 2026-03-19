@@ -6,6 +6,7 @@ import click
 from nxscli.cli.environment import Environment, pass_environment
 
 from nxscli_mpl.cli.types import plot_options
+from nxscli_mpl.commands._common import enable_plot_command
 
 if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
@@ -29,8 +30,8 @@ def cmd_pfft_stream(
     write: str,
 ) -> bool:
     """[plugin] Windowed streaming FFT plot."""
-    assert ctx.phandler
-    ctx.phandler.enable(
+    return enable_plot_command(
+        ctx,
         "m_fft_live",
         window=window,
         hop=hop,
@@ -41,5 +42,3 @@ def cmd_pfft_stream(
         fmt=fmt,
         write=write,
     )
-    ctx.needchannels = True
-    return True

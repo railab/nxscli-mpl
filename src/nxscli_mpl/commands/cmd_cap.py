@@ -7,6 +7,7 @@ from nxscli.cli.environment import Environment, pass_environment
 from nxscli.cli.types import Samples
 
 from nxscli_mpl.cli.types import plot_options
+from nxscli_mpl.commands._common import enable_plot_command
 
 if TYPE_CHECKING:
     from nxscli.trigger import DTriggerConfigReq
@@ -35,12 +36,8 @@ def cmd_m_snap(
     If SAMPLES argument is set to 'i' then we capture data until enter
     is press.
     """  # noqa: D301
-    # wait for enter if samples set to 'i'
-    assert ctx.phandler
-    if samples == 0:  # pragma: no cover
-        ctx.waitenter = True
-
-    ctx.phandler.enable(
+    return enable_plot_command(
+        ctx,
         "m_snap",
         samples=samples,
         channels=chan,
@@ -48,9 +45,4 @@ def cmd_m_snap(
         dpi=dpi,
         fmt=fmt,
         write=write,
-        nostop=ctx.waitenter,
     )
-
-    ctx.needchannels = True
-
-    return True
