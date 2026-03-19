@@ -22,13 +22,15 @@ from nxscli.transforms.pipeline import (
     WindowBinaryProcessor,
     WindowUnaryProcessor,
 )
-from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.animation_mpl import _create_matplotlib_inputhook
 from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
 from nxscli_mpl.plugins._windowed_common import (
     _PluginAnimationListWindowedBase,
     _PluginFuncAnimationWindowedBase,
+    _read_channel_pair,
+    _read_channel_values,
+    _SingleChannelAccumulator,
 )
 
 if TYPE_CHECKING:
@@ -268,10 +270,7 @@ class _PluginXyWindowed(_PluginFuncAnimationWindowedBase):
         self._pipeline: TransformPipeline
         self._xy_name = "xy"
         self._single_channel_mode = False
-        self._single_x: list[float] = []
-        self._single_y: list[float] = []
-        self._single_count = 0
-        self._single_last_emit = 0
+        self._single = _SingleChannelAccumulator(window=256, hop=64)
 
     @classmethod
     def get_inputhook(cls) -> Any:
@@ -310,10 +309,9 @@ class _PluginXyWindowed(_PluginFuncAnimationWindowedBase):
         )
         self._xlim: tuple[float, float] | None = None
         self._ylim: tuple[float, float] | None = None
-        self._single_x = []
-        self._single_y = []
-        self._single_count = 0
-        self._single_last_emit = 0
+        self._single = _SingleChannelAccumulator(
+            window=self._window, hop=self._hop
+        )
 
         for idx, pdata in enumerate(self._plot.plist):
             if idx != 0:
@@ -329,75 +327,24 @@ class _PluginXyWindowed(_PluginFuncAnimationWindowedBase):
         cast("Any", self._ani)._draw_was_started = True
         return True
 
-    def _read_channel_values(  # pragma: no cover
-        self, qdata: "PluginQueueData"
-    ) -> list[float]:
-        vals: list[float] = []
-        for _ in range(50):
-            payload = qdata.queue_get(block=False)
-            if not payload:
-                break
-            if not isinstance(payload, list):
-                continue
-            for block in payload:
-                if not isinstance(block, DNxscopeStreamBlock):
-                    continue
-                arr = block.data
-                if int(arr.shape[0]) == 0:
-                    continue
-                vals.extend(float(x) for x in arr[:, 0].tolist())
-        return vals
-
-    def _read_channel_pair(  # pragma: no cover
-        self, qdata: "PluginQueueData"
-    ) -> tuple[list[float], list[float]]:
-        xs: list[float] = []
-        ys: list[float] = []
-        for _ in range(50):
-            payload = qdata.queue_get(block=False)
-            if not payload:
-                break
-            if not isinstance(payload, list):
-                continue
-            for block in payload:
-                if not isinstance(block, DNxscopeStreamBlock):
-                    continue
-                arr = block.data
-                if int(arr.shape[0]) == 0 or int(arr.shape[1]) < 2:
-                    continue
-                xs.extend(float(x) for x in arr[:, 0].tolist())
-                ys.extend(float(y) for y in arr[:, 1].tolist())
-        return xs, ys
-
     def _collect_xy(self) -> XyResult | None:  # pragma: no cover
         if self._single_channel_mode:
-            xs, ys = self._read_channel_pair(self._plot.qdlist[0])
-            count = min(len(xs), len(ys))
-            if count > 0:
-                self._single_x.extend(xs[:count])
-                self._single_y.extend(ys[:count])
-                self._single_count += count
-                if len(self._single_x) > self._window:
-                    self._single_x = self._single_x[-self._window :]
-                    self._single_y = self._single_y[-self._window :]
-            if self._single_count <= 0:
+            xs, ys = _read_channel_pair(self._plot.qdlist[0])
+            collected = self._single.collect(xs, ys)
+            if collected is None:
                 return None
-            if self._single_last_emit > 0 and (
-                self._single_count - self._single_last_emit < self._hop
-            ):
-                return None
-            self._single_last_emit = self._single_count
+            left, right = collected
             return xy_relation(
-                self._single_x,
-                self._single_y,
+                left,
+                right,
                 window=self._window,
                 align_policy=self._align_policy,
             )
 
         qx = self._plot.qdlist[0]
         qy = self._plot.qdlist[1]
-        xs = self._read_channel_values(qx)
-        ys = self._read_channel_values(qy)
+        xs = _read_channel_values(qx)
+        ys = _read_channel_values(qy)
         count = min(len(xs), len(ys))
         outputs = self._pipeline.ingest({"x": xs[:count], "y": ys[:count]})
         raw = outputs.get(self._xy_name)
@@ -475,10 +422,7 @@ class _PluginPolarWindowed(_PluginFuncAnimationWindowedBase):
         self._polar_lines: list[Any] = []
         self._rmax: float | None = None
         self._single_channel_mode = False
-        self._single_theta: list[float] = []
-        self._single_radius: list[float] = []
-        self._single_count = 0
-        self._single_last_emit = 0
+        self._single = _SingleChannelAccumulator(window=256, hop=64)
 
     @classmethod
     def get_inputhook(cls) -> Any:
@@ -547,10 +491,9 @@ class _PluginPolarWindowed(_PluginFuncAnimationWindowedBase):
             )
         )
         self._rmax = None
-        self._single_theta = []
-        self._single_radius = []
-        self._single_count = 0
-        self._single_last_emit = 0
+        self._single = _SingleChannelAccumulator(
+            window=self._window, hop=self._hop
+        )
 
         for idx, pdata in enumerate(self._plot.plist):
             if idx != 0:
@@ -566,46 +509,6 @@ class _PluginPolarWindowed(_PluginFuncAnimationWindowedBase):
         )
         cast("Any", self._ani)._draw_was_started = True
         return True
-
-    def _read_channel_values(  # pragma: no cover
-        self, qdata: "PluginQueueData"
-    ) -> list[float]:
-        vals: list[float] = []
-        for _ in range(50):
-            payload = qdata.queue_get(block=False)
-            if not payload:
-                break
-            if not isinstance(payload, list):
-                continue
-            for block in payload:
-                if not isinstance(block, DNxscopeStreamBlock):
-                    continue
-                arr = block.data
-                if int(arr.shape[0]) == 0:
-                    continue
-                vals.extend(float(x) for x in arr[:, 0].tolist())
-        return vals
-
-    def _read_channel_pair(  # pragma: no cover
-        self, qdata: "PluginQueueData"
-    ) -> tuple[list[float], list[float]]:
-        xs: list[float] = []
-        ys: list[float] = []
-        for _ in range(50):
-            payload = qdata.queue_get(block=False)
-            if not payload:
-                break
-            if not isinstance(payload, list):
-                continue
-            for block in payload:
-                if not isinstance(block, DNxscopeStreamBlock):
-                    continue
-                arr = block.data
-                if int(arr.shape[0]) == 0 or int(arr.shape[1]) < 2:
-                    continue
-                xs.extend(float(x) for x in arr[:, 0].tolist())
-                ys.extend(float(y) for y in arr[:, 1].tolist())
-        return xs, ys
 
     def _update_polar(self) -> list[Any]:  # pragma: no cover
         values = self._collect_theta_radius()
@@ -639,32 +542,21 @@ class _PluginPolarWindowed(_PluginFuncAnimationWindowedBase):
     def _collect_theta_radius_single(  # pragma: no cover
         self,
     ) -> tuple[np.ndarray, np.ndarray] | None:
-        xs, ys = self._read_channel_pair(self._plot.qdlist[0])
-        count = min(len(xs), len(ys))
-        if count > 0:
-            self._single_theta.extend(xs[:count])
-            self._single_radius.extend(ys[:count])
-            self._single_count += count
-            if len(self._single_theta) > self._window:
-                self._single_theta = self._single_theta[-self._window :]
-                self._single_radius = self._single_radius[-self._window :]
-        if self._single_count <= 0:
+        xs, ys = _read_channel_pair(self._plot.qdlist[0])
+        collected = self._single.collect(xs, ys)
+        if collected is None:
             return None
-        if self._single_last_emit > 0 and (
-            self._single_count - self._single_last_emit < self._hop
-        ):
-            return None
-        self._single_last_emit = self._single_count
+        left, right = collected
         return (
-            np.asarray(self._single_theta, dtype=np.float64),
-            np.asarray(self._single_radius, dtype=np.float64),
+            np.asarray(left, dtype=np.float64),
+            np.asarray(right, dtype=np.float64),
         )
 
     def _collect_theta_radius_xy(  # pragma: no cover
         self,
     ) -> tuple[np.ndarray, np.ndarray] | None:
-        xs = self._read_channel_values(self._plot.qdlist[0])
-        ys = self._read_channel_values(self._plot.qdlist[1])
+        xs = _read_channel_values(self._plot.qdlist[0])
+        ys = _read_channel_values(self._plot.qdlist[1])
         count = min(len(xs), len(ys))
         outputs = self._pipeline.ingest({"x": xs[:count], "y": ys[:count]})
         raw = outputs.get(self._polar_name)

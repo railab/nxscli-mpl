@@ -2,6 +2,7 @@
 
 import numpy as np
 from nxslib.dev import DeviceChannel
+from nxslib.nxscope import DNxscopeStreamBlock
 
 import nxscli_mpl.plugins._typed_windowed as typed_windowed
 import nxscli_mpl.plugins._windowed_common as windowed_common
@@ -229,3 +230,93 @@ def test_xy_and_polar_plugins_init() -> None:
     polar = PluginPolar()
     assert polar._single_channel_mode is False
     assert polar._polar_ax is None
+
+
+def test_windowed_common_reads_stream_blocks() -> None:
+    class FakeQData:
+        def __init__(self) -> None:
+            self._payloads = [
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[1.0, 2.0], [3.0, 4.0]]),
+                        meta=None,
+                    )
+                ],
+                [],
+            ]
+
+        def queue_get(self, block: bool = False):  # noqa: ARG002
+            return self._payloads.pop(0)
+
+    xs, ys = windowed_common._read_channel_pair(FakeQData())
+
+    assert xs == [1.0, 3.0]
+    assert ys == [2.0, 4.0]
+
+
+def test_windowed_common_reads_single_channel_values() -> None:
+    class FakeQData:
+        def __init__(self) -> None:
+            self._payloads = [
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[5.0], [6.0]]), meta=None
+                    )
+                ],
+                [],
+            ]
+
+        def queue_get(self, block: bool = False):  # noqa: ARG002
+            return self._payloads.pop(0)
+
+    assert windowed_common._read_channel_values(FakeQData()) == [5.0, 6.0]
+
+
+def test_windowed_common_skips_invalid_payloads() -> None:
+    class FakeQData:
+        def __init__(self) -> None:
+            self._payloads = [
+                "bad-payload",
+                [object()],
+                [DNxscopeStreamBlock(data=np.empty((0, 2)), meta=None)],
+                [],
+            ]
+
+        def queue_get(self, block: bool = False):  # noqa: ARG002
+            return self._payloads.pop(0)
+
+    assert windowed_common._read_channel_values(FakeQData()) == []
+    assert windowed_common._read_channel_pair(FakeQData()) == ([], [])
+
+
+def test_windowed_common_exhausts_drain_limit() -> None:
+    class FakeQData:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def queue_get(self, block: bool = False):  # noqa: ARG002
+            self.calls += 1
+            return [object()]
+
+    qdata = FakeQData()
+
+    assert windowed_common._read_channel_values(qdata) == []
+    assert qdata.calls == 50
+
+    qdata = FakeQData()
+    assert windowed_common._read_channel_pair(qdata) == ([], [])
+    assert qdata.calls == 50
+
+
+def test_windowed_common_accumulator_applies_window_and_hop() -> None:
+    acc = windowed_common._SingleChannelAccumulator(window=3, hop=2)
+
+    assert acc.collect([], []) is None
+    assert acc.collect([1.0], [2.0]) == ([1.0], [2.0])
+    assert acc.collect([3.0], [4.0]) is None
+    assert acc.collect([5.0], [6.0]) == ([1.0, 3.0, 5.0], [2.0, 4.0, 6.0])
+    assert acc.collect([7.0], [8.0]) is None
+    assert acc.collect([9.0], [10.0]) == (
+        [5.0, 7.0, 9.0],
+        [6.0, 8.0, 10.0],
+    )
