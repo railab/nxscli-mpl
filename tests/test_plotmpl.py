@@ -11,10 +11,13 @@ from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.plot_mpl import (
     EPlotMode,
+    MplManager,
     PlotDataAxesMpl,
     PlotDataCommon,
     PluginAnimationCommonMpl,
     PluginPlotMpl,
+    build_plot_surface,
+    create_plot_surface,
 )
 
 
@@ -86,6 +89,20 @@ def test_plotdataaxesmpl():
     assert x._fmt == ["o", "b"]
 
 
+def test_mplmanager_func_animation_delegates(mocker) -> None:
+    fig = Figure()
+    func = mocker.Mock()
+    frames = mocker.Mock(return_value=iter([1]))
+    create = mocker.patch(
+        "nxscli_mpl.plot_mpl.FuncAnimation", return_value="ani"
+    )
+
+    out = MplManager.func_animation(fig=fig, func=func, frames=frames)
+
+    assert out == "ani"
+    create.assert_called_once_with(fig=fig, func=func, frames=frames)
+
+
 def test_pluginanimationcommonmpl():
     q = queue.Queue()
     chan = DeviceChannel(chan=0, _type=2, vdim=2, name="chan0")
@@ -153,6 +170,25 @@ def test_pluginplotmpl():
     TriggerHandler.cls_cleanup()
 
 
+def test_create_plot_surface_returns_plugin_plot() -> None:
+    chanlist = [DeviceChannel(chan=1, _type=2, vdim=1, name="chan1")]
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    trig = [TriggerHandler(1, dtc)]
+    cb = PluginDataCb(dummy_stream_sub, dummy_stream_unsub)
+
+    plot = create_plot_surface(
+        chanlist=chanlist,
+        trig=trig,
+        cb=cb,
+        mode="attached",
+    )
+
+    assert isinstance(plot, PluginPlotMpl)
+    assert plot.mode == EPlotMode.ATTACHED.value
+    plot.close()
+    TriggerHandler.cls_cleanup()
+
+
 def test_pluginplotmpl_ani_clear_stops_handlers() -> None:
     """Animation cleanup should stop registered handlers before clearing."""
     chanlist = [DeviceChannel(chan=1, _type=2, vdim=1, name="chan1")]
@@ -178,6 +214,75 @@ def test_pluginplotmpl_ani_clear_stops_handlers() -> None:
 
     plot.close()
     TriggerHandler.cls_cleanup()
+
+
+def test_pluginanimationcommonmpl_init_and_start_delegate(mocker) -> None:
+    q = queue.Queue()
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    qdata = PluginQueueData(q, chan, dtc)
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
+    func_animation = mocker.patch.object(
+        MplManager,
+        "func_animation",
+        return_value="animation",
+    )
+
+    assert ani._animation_init(pdata) is pdata.lns
+    ani.start()
+
+    assert ani._writer is None
+    assert ani._ani == "animation"
+    func_animation.assert_called_once()
+
+
+def test_build_plot_surface_delegates_to_factory(mocker) -> None:
+    """build_plot_surface should normalize handler callbacks once."""
+
+    class FakePluginHandler:
+        def __init__(self) -> None:
+            self.cb = object()
+
+        def chanlist_plugin(self, channels):
+            return [f"chan-{channel}" for channel in channels]
+
+        def triggers_plugin(self, chanlist, trig):
+            return [("trig", chanlist, trig)]
+
+        def cb_get(self):
+            return self.cb
+
+    handler = FakePluginHandler()
+    surface = object()
+    create = mocker.patch(
+        "nxscli_mpl.plot_mpl.create_plot_surface", return_value=surface
+    )
+
+    out = build_plot_surface(
+        handler,
+        {
+            "channels": [1, 2],
+            "trig": ["always"],
+            "dpi": 123,
+            "fmt": ["o"],
+            "plot_mode": "attached",
+            "plot_parent": "parent",
+        },
+    )
+
+    assert out is surface
+    create.assert_called_once_with(
+        chanlist=["chan-1", "chan-2"],
+        trig=[("trig", ["chan-1", "chan-2"], ["always"])],
+        cb=handler.cb,
+        dpi=123,
+        fmt=["o"],
+        mode="attached",
+        parent="parent",
+    )
 
 
 def test_pluginanimationcommonmpl_numpy_frames():

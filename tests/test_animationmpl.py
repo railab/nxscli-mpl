@@ -1,19 +1,18 @@
 import pytest  # type: ignore
-from nxscli.phandler import PluginHandler
-from nxslib.intf.dummy import DummyDev
-from nxslib.nxscope import NxscopeHandler
-from nxslib.proto.parse import Parser
 
 from nxscli_mpl.animation_mpl import IPluginAnimation
-from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
 
 
-class XTestAnimation(PluginAnimationCommonMpl):
-    def __init__(self, fig, pdata, qdata, write):
-        super().__init__(fig, pdata, qdata, write)
+class DummyAni:
+    def __init__(self):
+        self.started = 0
+        self.stopped = 0
 
-    def _animation_update(self, frame, pdata):  # pragma: no cover
-        pass
+    def start(self):
+        self.started += 1
+
+    def stop(self):
+        self.stopped += 1
 
 
 class XTestPluginAnimation(IPluginAnimation):
@@ -21,7 +20,26 @@ class XTestPluginAnimation(IPluginAnimation):
         super().__init__()
 
     def _start(self, fig, pdata, qdata, kwargs):
-        return XTestAnimation(fig, pdata, qdata, kwargs["write"])
+        return DummyAni()
+
+
+class FakePlot:
+    def __init__(self, *, mode="detached"):
+        self.mode = mode
+        self.fig = object()
+        self.ani = []
+        self.plist = [object()] if mode else []
+        self.qdlist = [object()] if mode else []
+
+    def ani_clear(self):
+        self.ani = []
+
+    def ani_append(self, ani):
+        self.ani.append(ani)
+
+
+class FakePluginHandler:
+    pass
 
 
 def test_ipluginanimation_init():
@@ -45,29 +63,19 @@ def test_ipluginanimation_init():
     assert x.data_wait() is True
     assert x.get_plot_handler() is None
 
-    p = PluginHandler()
-    x.connect_phandler(p)
-
-    # clean up
-    p.cleanup()
+    x.connect_phandler(FakePluginHandler())
 
 
-@pytest.fixture
-def nxscope():
-    intf = DummyDev()
-    parse = Parser()
-    nxscope = NxscopeHandler(intf, parse)
-    return nxscope
-
-
-def test_ipluginanimation_start_nochannels(nxscope):
+def test_ipluginanimation_start_nochannels(mocker):
     x = XTestPluginAnimation()
-    p = PluginHandler()
-    p.nxscope_connect(nxscope)
-    x.connect_phandler(p)
+    x.connect_phandler(FakePluginHandler())
+    mocker.patch(
+        "nxscli_mpl.animation_mpl.build_plot_surface", return_value=FakePlot()
+    )
+    show = mocker.patch("nxscli_mpl.animation_mpl.MplManager.show")
 
     # start
-    args = {"channels": [], "trig": [], "dpi": 100, "fmt": ""}
+    args = {"channels": [], "trig": [], "dpi": 100, "fmt": "", "write": False}
     assert x.start(args) is True
 
     # clear
@@ -75,22 +83,19 @@ def test_ipluginanimation_start_nochannels(nxscope):
 
     # result
     x.result()
+    show.assert_called_once_with(block=False)
 
     # stop
     x.stop()
 
-    # clean up
-    p.cleanup()
 
-
-def test_ipluginanimation_start(nxscope):
+def test_ipluginanimation_start(mocker):
     x = XTestPluginAnimation()
-    p = PluginHandler()
-    p.nxscope_connect(nxscope)
-    x.connect_phandler(p)
-
-    # configure channels
-    p.channels_configure([1], 0)
+    x.connect_phandler(FakePluginHandler())
+    plot = FakePlot()
+    mocker.patch(
+        "nxscli_mpl.animation_mpl.build_plot_surface", return_value=plot
+    )
 
     # start
     args = {
@@ -103,7 +108,7 @@ def test_ipluginanimation_start(nxscope):
     assert x.start(args) is True
 
     # get_plot_handler returns the PluginPlotMpl after start
-    assert x.get_plot_handler() is not None
+    assert x.get_plot_handler() is plot
 
     # clear
     x.clear()
@@ -114,9 +119,6 @@ def test_ipluginanimation_start(nxscope):
     # stop
     x.stop()
 
-    # clean up
-    p.cleanup()
-
 
 def test_ipluginanimation_get_inputhook():
     hook = IPluginAnimation.get_inputhook()
@@ -124,12 +126,14 @@ def test_ipluginanimation_get_inputhook():
     hook(None)
 
 
-def test_ipluginanimation_result_attached(nxscope):
+def test_ipluginanimation_result_attached(mocker):
     x = XTestPluginAnimation()
-    p = PluginHandler()
-    p.nxscope_connect(nxscope)
-    x.connect_phandler(p)
-    p.channels_configure([1], 0)
+    x.connect_phandler(FakePluginHandler())
+    plot = FakePlot(mode="attached")
+    mocker.patch(
+        "nxscli_mpl.animation_mpl.build_plot_surface", return_value=plot
+    )
+    show = mocker.patch("nxscli_mpl.animation_mpl.MplManager.show")
 
     args = {
         "channels": [1],
@@ -140,7 +144,8 @@ def test_ipluginanimation_result_attached(nxscope):
         "plot_mode": "attached",
     }
     assert x.start(args) is True
-    plot = x.result()
-    assert plot.mode == "attached"
+    ret = x.result()
+    assert ret is plot
+    assert ret.mode == "attached"
+    show.assert_not_called()
     x.stop()
-    p.cleanup()
