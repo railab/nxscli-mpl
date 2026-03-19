@@ -4,6 +4,7 @@ import numpy as np
 from nxslib.dev import DeviceChannel
 
 import nxscli_mpl.plugins._typed_windowed as typed_windowed
+import nxscli_mpl.plugins._windowed_common as windowed_common
 from nxscli_mpl.plot_mpl import PlotDataCommon
 from nxscli_mpl.plugins._typed_windowed import (
     PluginFftStream,
@@ -166,12 +167,12 @@ def test_typed_windowed_start_and_result_use_common_plot_surface(
     plugin.connect_phandler(object())
     plot = FakePlot()
     build = mocker.patch.object(
-        typed_windowed, "build_plot_surface", return_value=plot
+        windowed_common, "build_plot_surface", return_value=plot
     )
     mocker.patch.object(
         typed_windowed, "_WindowedTypedAnimation", StopTrackingAni
     )
-    show = mocker.patch.object(typed_windowed.MplManager, "show")
+    show = mocker.patch.object(windowed_common.MplManager, "show")
 
     out = plugin.start(
         make_plot_kwargs(
