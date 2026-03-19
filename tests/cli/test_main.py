@@ -5,7 +5,16 @@ from nxscli.cli.main import main
 
 
 @pytest.fixture
-def runner(mocker):
+def enable_plugin(mocker):
+    return mocker.patch(
+        "nxscli.phandler.PluginHandler.enable",
+        autospec=True,
+        return_value=True,
+    )
+
+
+@pytest.fixture
+def runner(mocker, enable_plugin):
     mocker.patch.object(nxscli.cli.main, "wait_for_plugins", autospec=True)
     return CliRunner()
 
@@ -162,12 +171,8 @@ def test_main_mpolar_stream(runner):
     assert result.exit_code == 0
 
 
-def test_main_dispatch_fft_special_channel(runner, mocker):
-    patched = mocker.patch(
-        "nxscli.phandler.PluginHandler.enable",
-        autospec=True,
-        return_value=True,
-    )
+def test_main_dispatch_fft_special_channel(runner, enable_plugin):
+    patched = enable_plugin
     args = ["dummy", "chan", "11", "m_fft", "64"]
     result = runner.invoke(main, args)
     assert result.exit_code == 0
@@ -176,12 +181,8 @@ def test_main_dispatch_fft_special_channel(runner, mocker):
     assert patched.call_args.kwargs["channels"] is None
 
 
-def test_main_dispatch_hist_special_channel(runner, mocker):
-    patched = mocker.patch(
-        "nxscli.phandler.PluginHandler.enable",
-        autospec=True,
-        return_value=True,
-    )
+def test_main_dispatch_hist_special_channel(runner, enable_plugin):
+    patched = enable_plugin
     args = ["dummy", "chan", "13", "m_hist_live", "--bins", "16", "64"]
     result = runner.invoke(main, args)
     assert result.exit_code == 0
@@ -190,12 +191,8 @@ def test_main_dispatch_hist_special_channel(runner, mocker):
     assert patched.call_args.kwargs["channels"] is None
 
 
-def test_main_dispatch_xy_special_channels(runner, mocker):
-    patched = mocker.patch(
-        "nxscli.phandler.PluginHandler.enable",
-        autospec=True,
-        return_value=True,
-    )
+def test_main_dispatch_xy_special_channels(runner, enable_plugin):
+    patched = enable_plugin
     args = ["dummy", "chan", "15,16", "m_xy_live", "64"]
     result = runner.invoke(main, args)
     assert result.exit_code == 0
