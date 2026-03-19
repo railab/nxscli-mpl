@@ -19,6 +19,7 @@ from nxscli_mpl.plot_mpl import (
     build_plot_surface,
     create_plot_surface,
 )
+from tests.helpers import RecordingPluginHandler
 
 
 def test_plotdatacommon():
@@ -241,21 +242,7 @@ def test_pluginanimationcommonmpl_init_and_start_delegate(mocker) -> None:
 
 def test_build_plot_surface_delegates_to_factory(mocker) -> None:
     """build_plot_surface should normalize handler callbacks once."""
-
-    class FakePluginHandler:
-        def __init__(self) -> None:
-            self.cb = object()
-
-        def chanlist_plugin(self, channels):
-            return [f"chan-{channel}" for channel in channels]
-
-        def triggers_plugin(self, chanlist, trig):
-            return [("trig", chanlist, trig)]
-
-        def cb_get(self):
-            return self.cb
-
-    handler = FakePluginHandler()
+    handler = RecordingPluginHandler()
     surface = object()
     create = mocker.patch(
         "nxscli_mpl.plot_mpl.create_plot_surface", return_value=surface
