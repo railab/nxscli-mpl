@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
-from nxscli.iplugin import IPluginPlotDynamic
 from nxscli.logger import logger
 from nxscli.transforms.models import (
     FftResult,
@@ -26,11 +25,10 @@ from nxscli.transforms.pipeline import (
 from nxslib.nxscope import DNxscopeStreamBlock
 
 from nxscli_mpl.animation_mpl import _create_matplotlib_inputhook
-from nxscli_mpl.plot_mpl import (
-    MplManager,
-    PluginAnimationCommonMpl,
-    PluginPlotMpl,
-    build_plot_surface,
+from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
+from nxscli_mpl.plugins._windowed_common import (
+    _PluginAnimationListWindowedBase,
+    _PluginFuncAnimationWindowedBase,
 )
 
 if TYPE_CHECKING:
@@ -222,54 +220,22 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         return ymax
 
 
-class _PluginTypedWindowed(IPluginPlotDynamic):
+class _PluginTypedWindowed(_PluginAnimationListWindowedBase):
     """Windowed dynamic plugin for one typed transform."""
 
     plot_type = "fft"
 
     def __init__(self) -> None:
         super().__init__()
-        self._plot: "PluginPlotMpl"
 
     @classmethod
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
 
-    def get_plot_handler(self) -> "PluginPlotMpl | None":
-        """Return the matplotlib plot handler.
-
-        :return: PluginPlotMpl instance, or None if start() has not been called
-        """
-        return getattr(self, "_plot", None)
-
-    @property
-    def stream(self) -> bool:
-        return True
-
-    def wait_for_plugin(self) -> bool:  # pragma: no cover
-        done = True
-        if MplManager.fig_is_open():
-            done = False
-            MplManager.pause(1)
-        return done
-
-    def stop(self) -> None:  # pragma: no cover
-        if hasattr(self, "_plot") and len(self._plot.ani) > 0:
-            for ani in self._plot.ani:
-                ani.stop()
-
-    def clear(self) -> None:  # pragma: no cover
-        if hasattr(self, "_plot"):
-            self._plot.ani_clear()
-
-    def data_wait(self, timeout: float = 0.0) -> bool:
-        return True
-
     def start(self, kwargs: Any) -> bool:  # pragma: no cover
-        assert self._phandler
         logger.info("start %s stream %s", self.plot_type, str(kwargs))
 
-        self._plot = build_plot_surface(self._phandler, kwargs)
+        self._build_plot(kwargs)
         self.clear()
 
         for i, pdata in enumerate(self._plot.plist):
@@ -290,25 +256,17 @@ class _PluginTypedWindowed(IPluginPlotDynamic):
 
         return True
 
-    def result(self) -> "PluginPlotMpl":  # pragma: no cover
-        assert self._plot
-        if self._plot.mode == "detached":
-            MplManager.show(block=False)
-        return self._plot
 
-
-class _PluginXyWindowed(IPluginPlotDynamic):
+class _PluginXyWindowed(_PluginFuncAnimationWindowedBase):
     """Windowed XY scatter animation using two channels."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._plot: "PluginPlotMpl"
         self._window = 256
         self._hop = 64
         self._align_policy = "truncate"
         self._pipeline: TransformPipeline
         self._xy_name = "xy"
-        self._ani: Any = None
         self._single_channel_mode = False
         self._single_x: list[float] = []
         self._single_y: list[float] = []
@@ -319,37 +277,12 @@ class _PluginXyWindowed(IPluginPlotDynamic):
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
 
-    def get_plot_handler(self) -> "PluginPlotMpl | None":
-        """Return the matplotlib plot handler.
-
-        :return: PluginPlotMpl instance, or None if start() has not been called
-        """
-        return getattr(self, "_plot", None)
-
-    @property
-    def stream(self) -> bool:
-        return True
-
-    def data_wait(self, timeout: float = 0.0) -> bool:
-        return True
-
-    def wait_for_plugin(self) -> bool:  # pragma: no cover
-        done = True
-        if MplManager.fig_is_open():
-            done = False
-            MplManager.pause(1)
-        return done
-
-    def stop(self) -> None:  # pragma: no cover
-        if self._ani is not None and self._ani.event_source is not None:
-            self._ani.event_source.stop()
-
     def start(self, kwargs: Any) -> bool:  # pragma: no cover
         assert self._phandler
         chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
         if len(chanlist) < 1:
             raise ValueError("xy_stream requires at least one channel")
-        self._plot = build_plot_surface(self._phandler, kwargs)
+        self._build_plot(kwargs)
         self._window = max(2, int(kwargs["window"]))
         self._hop = max(1, int(kwargs.get("hop", 0) or (self._window // 4)))
         self._align_policy = str(kwargs.get("align_policy", "truncate"))
@@ -393,7 +326,7 @@ class _PluginXyWindowed(IPluginPlotDynamic):
             blit=False,
             cache_frame_data=False,
         )
-        self._ani._draw_was_started = True
+        cast("Any", self._ani)._draw_was_started = True
         return True
 
     def _read_channel_values(  # pragma: no cover
@@ -511,11 +444,6 @@ class _PluginXyWindowed(IPluginPlotDynamic):
             pdata.ax.set_ylim(*self._ylim)
         return pdata.lns
 
-    def result(self) -> "PluginPlotMpl":  # pragma: no cover
-        if self._plot.mode == "detached":
-            MplManager.show(block=False)
-        return self._plot
-
 
 class PluginFftStream(_PluginTypedWindowed):
     """FFT stream plot."""
@@ -533,18 +461,16 @@ class PluginXyStream(_PluginXyWindowed):
     """XY stream plot."""
 
 
-class _PluginPolarWindowed(IPluginPlotDynamic):
+class _PluginPolarWindowed(_PluginFuncAnimationWindowedBase):
     """Windowed polar animation using two channels."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._plot: "PluginPlotMpl"
         self._window = 256
         self._hop = 64
         self._align_policy = "truncate"
         self._pipeline: TransformPipeline
         self._polar_name = "polar"
-        self._ani: Any = None
         self._polar_ax: Any = None
         self._polar_lines: list[Any] = []
         self._rmax: float | None = None
@@ -557,31 +483,6 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
     @classmethod
     def get_inputhook(cls) -> Any:
         return _create_matplotlib_inputhook()
-
-    def get_plot_handler(self) -> "PluginPlotMpl | None":
-        """Return the matplotlib plot handler.
-
-        :return: PluginPlotMpl instance, or None if start() has not been called
-        """
-        return getattr(self, "_plot", None)
-
-    @property
-    def stream(self) -> bool:
-        return True
-
-    def data_wait(self, timeout: float = 0.0) -> bool:
-        return True
-
-    def wait_for_plugin(self) -> bool:  # pragma: no cover
-        done = True
-        if MplManager.fig_is_open():
-            done = False
-            MplManager.pause(1)
-        return done
-
-    def stop(self) -> None:  # pragma: no cover
-        if self._ani is not None and self._ani.event_source is not None:
-            self._ani.event_source.stop()
 
     def _configure_polar_axes(self) -> None:  # pragma: no cover
         pdata = self._plot.plist[0]
@@ -618,7 +519,7 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
         chanlist = self._phandler.chanlist_plugin(kwargs["channels"])
         if len(chanlist) < 1:
             raise ValueError("polar_stream requires at least one channel")
-        self._plot = build_plot_surface(self._phandler, kwargs)
+        self._build_plot(kwargs)
         self._window = max(2, int(kwargs["window"]))
         self._hop = max(1, int(kwargs.get("hop", 0) or (self._window // 4)))
         self._align_policy = str(kwargs.get("align_policy", "truncate"))
@@ -663,7 +564,7 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
             blit=False,
             cache_frame_data=False,
         )
-        self._ani._draw_was_started = True
+        cast("Any", self._ani)._draw_was_started = True
         return True
 
     def _read_channel_values(  # pragma: no cover
@@ -770,11 +671,6 @@ class _PluginPolarWindowed(IPluginPlotDynamic):
         if raw is None or not isinstance(raw, PolarResult):
             return None
         return raw.theta, raw.radius
-
-    def result(self) -> "PluginPlotMpl":  # pragma: no cover
-        if self._plot.mode == "detached":
-            MplManager.show(block=False)
-        return self._plot
 
 
 class PluginPolarStream(_PluginPolarWindowed):
