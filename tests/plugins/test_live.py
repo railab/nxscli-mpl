@@ -18,6 +18,6 @@ def test_live_animation_start_builds_common_animation() -> None:
 
     assert isinstance(ani, LiveAnimation)
     assert ani._fig is fig
-    assert ani._pdata is pdata
-    assert ani._qdata is qdata
+    assert ani._plot_data is pdata
+    assert ani._queue_data is qdata
     assert ani._writer is None

@@ -108,9 +108,9 @@ class PluginAnimationCommonMpl:
         :param kwargs: implementation specific arguments
         """
         self._fig = fig
-        self._cnt = 0
-        self._pdata = pdata
-        self._qdata = qdata
+        self._sample_count = 0
+        self._plot_data = pdata
+        self._queue_data = qdata
         self._ani = None
         self._writer: PillowWriter | FFMpegWriter | None
         self._writer = setup_writer(self._fig, write)
@@ -127,7 +127,9 @@ class PluginAnimationCommonMpl:
     def _animation_frames_blocks(
         self, qdata: PluginQueueData
     ) -> tuple[list["np.ndarray[Any, Any]"], list["np.ndarray[Any, Any]"]]:
-        xdata, ydata, self._cnt = fetch_animation_frame(qdata, count=self._cnt)
+        xdata, ydata, self._sample_count = fetch_animation_frame(
+            qdata, count=self._sample_count
+        )
         return xdata, ydata
 
     def _animation_update(
@@ -158,9 +160,9 @@ class PluginAnimationCommonMpl:
 
     def start(self) -> None:
         """Start an animation."""
-        update = partial(self._animation_update_cmn, pdata=self._pdata)
-        frames = partial(self._animation_frames, qdata=self._qdata)
-        init = partial(self._animation_init, pdata=self._pdata)
+        update = partial(self._animation_update_cmn, pdata=self._plot_data)
+        frames = partial(self._animation_frames, qdata=self._queue_data)
+        init = partial(self._animation_init, pdata=self._plot_data)
         self._ani = start_animation(
             fig=self._fig,
             update=update,
@@ -170,7 +172,7 @@ class PluginAnimationCommonMpl:
 
     def xaxis_disable(self) -> None:  # pragma: no cover
         """Hide x axis."""
-        self._pdata.xaxis_disable()
+        self._plot_data.xaxis_disable()
 
     def yscale_extend(
         self, frame: list[Any], pdata: PlotDataAxesMpl, scale: float = 1.1
