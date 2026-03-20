@@ -1,7 +1,7 @@
 """Private windowed transform strategies for FFT and histogram plots."""
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol, Sequence
 
 import numpy as np
 from nxscli.transforms.models import FftResult, HistogramResult
@@ -12,6 +12,59 @@ from nxscli_mpl._plot_constants import (
     AXIS_MIN_MAGNITUDE,
     AXIS_PADDING_FACTOR,
 )
+
+
+class _LineLike(Protocol):
+    """Minimal line surface used by windowed strategies."""
+
+    def set_data(self, x: object, y: object) -> None:
+        """Assign line data."""
+        raise NotImplementedError
+
+
+class _AxesLike(Protocol):
+    """Minimal axes surface used by windowed strategies."""
+
+    def set_xlim(self, low: float, high: float) -> None:
+        """Set x limits."""
+        raise NotImplementedError
+
+    def set_ylim(self, low: float, high: float) -> None:
+        """Set y limits."""
+        raise NotImplementedError
+
+    def cla(self) -> None:
+        """Clear axes."""
+        raise NotImplementedError
+
+    def bar(
+        self,
+        x: object,
+        height: object,
+        *,
+        width: object,
+        alpha: float,
+    ) -> None:
+        """Draw bars."""
+        raise NotImplementedError
+
+    def set_title(self, title: str) -> None:
+        """Set title."""
+        raise NotImplementedError
+
+
+class _WindowedPlotDataLike(Protocol):
+    """Minimal plot-data surface used by windowed strategies."""
+
+    @property
+    def ax(self) -> _AxesLike:
+        """Return axes."""
+        raise NotImplementedError
+
+    @property
+    def lns(self) -> Sequence[_LineLike]:
+        """Return line artists."""
+        raise NotImplementedError
 
 
 @dataclass
@@ -40,7 +93,7 @@ class WindowedTransformStrategy(Protocol):
 
     def update_plot(
         self,
-        pdata: Any,
+        pdata: _WindowedPlotDataLike,
         outputs: dict[str, object],
         *,
         proc_names: list[str],
@@ -51,7 +104,7 @@ class WindowedTransformStrategy(Protocol):
 
 
 def _lock_axis(  # pragma: no cover
-    pdata: Any,
+    pdata: _WindowedPlotDataLike,
     state: WindowedTransformState,
     *,
     xmax: float | None,
@@ -90,7 +143,7 @@ class FftWindowedStrategy:
 
     def update_plot(  # pragma: no cover
         self,
-        pdata: Any,
+        pdata: _WindowedPlotDataLike,
         outputs: dict[str, object],
         *,
         proc_names: list[str],
@@ -134,7 +187,7 @@ class HistogramWindowedStrategy:
 
     def update_plot(  # pragma: no cover
         self,
-        pdata: Any,
+        pdata: _WindowedPlotDataLike,
         outputs: dict[str, object],
         *,
         proc_names: list[str],

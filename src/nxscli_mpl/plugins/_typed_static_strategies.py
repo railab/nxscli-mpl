@@ -1,6 +1,6 @@
 """Private static render strategies for dedicated plot types."""
 
-from typing import Any, Protocol
+from typing import Protocol
 
 import numpy as np
 from nxscli.transforms.operators_window import (
@@ -8,6 +8,46 @@ from nxscli.transforms.operators_window import (
     histogram_counts,
     xy_relation,
 )
+
+
+class _AxesLike(Protocol):
+    """Minimal axes surface used by static strategies."""
+
+    def cla(self) -> None:
+        """Clear axes."""
+        raise NotImplementedError
+
+    def bar(
+        self,
+        x: object,
+        height: object,
+        *,
+        width: object,
+        alpha: float,
+    ) -> None:
+        """Draw bars."""
+        raise NotImplementedError
+
+    def set_title(self, title: str) -> None:
+        """Set title."""
+        raise NotImplementedError
+
+    def relim(self) -> None:
+        """Recompute limits."""
+        raise NotImplementedError
+
+    def autoscale_view(self) -> None:
+        """Autoscale axes."""
+        raise NotImplementedError
+
+
+class _StaticPlotDataLike(Protocol):
+    """Minimal plot-data surface used by static strategies."""
+
+    @property
+    def ax(self) -> _AxesLike:
+        """Return axes."""
+        raise NotImplementedError
 
 
 class StaticRenderStrategy(Protocol):
@@ -25,7 +65,7 @@ class StaticRenderStrategy(Protocol):
 
     def render(  # pragma: no cover
         self,
-        pdata: Any,
+        pdata: _StaticPlotDataLike,
         series: list[list[float]],
         *,
         samples: int,
@@ -52,7 +92,7 @@ class TimeseriesStaticStrategy:
 
     def render(  # pragma: no cover
         self,
-        pdata: Any,
+        pdata: _StaticPlotDataLike,
         series: list[list[float]],
         *,
         samples: int,
@@ -89,7 +129,7 @@ class FftStaticStrategy:
 
     def render(  # pragma: no cover
         self,
-        pdata: Any,
+        pdata: _StaticPlotDataLike,
         series: list[list[float]],
         *,
         samples: int,
@@ -127,7 +167,7 @@ class HistogramStaticStrategy:
 
     def render(
         self,
-        pdata: Any,
+        pdata: _StaticPlotDataLike,
         series: list[list[float]],
         *,
         samples: int,
@@ -179,7 +219,7 @@ class XyStaticStrategy:
 
     def render(
         self,
-        pdata: Any,
+        pdata: _StaticPlotDataLike,
         series: list[list[float]],
         *,
         samples: int,
