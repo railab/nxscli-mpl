@@ -1,4 +1,6 @@
 import queue
+import sys
+import types
 
 import numpy as np
 import pytest  # type: ignore
@@ -13,6 +15,12 @@ from nxscli_mpl._animation_lifecycle import (
     setup_writer,
     stop_animation,
     update_animation_common,
+)
+from nxscli_mpl._plot_lifecycle import (
+    attached_canvas_widget,
+    clear_animations,
+    close_surface,
+    is_qwidget,
 )
 from nxscli_mpl.plot_mpl import (
     EPlotMode,
@@ -156,6 +164,7 @@ def test_pluginplotmpl():
     assert len(x.plist) > 0
     assert len(x._chanlist) == 2  # one channel not numerical
     assert x._fmt == [None, None]
+    x.plot_clear()
 
     # test fmt configuration
     x = make_plot(chanlist, fmt="o")
@@ -283,6 +292,48 @@ def test_mpl_animation_lifecycle_helpers(mocker) -> None:
     ani.pause.assert_called_once()
     writer.finish.assert_called_once()
     stop_animation(mocker.Mock(event_source=None), None)
+
+
+def test_mpl_plot_lifecycle_helpers(mocker) -> None:
+    """Private plot lifecycle helpers should cover cleanup edge cases."""
+    bad = mocker.Mock()
+    bad.stop.side_effect = RuntimeError("boom")
+    good = mocker.Mock()
+    assert clear_animations([bad, good]) == []
+    good.stop.assert_called_once()
+
+    fig = Figure()
+    close_figure = mocker.Mock()
+    widget = mocker.Mock()
+    assert close_surface(fig, widget, close_figure) is None
+    close_figure.assert_called_once_with(fig)
+    widget.close.assert_called_once()
+    assert close_surface(None, object(), close_figure) is None
+
+    fake_qtwidgets = types.SimpleNamespace(QWidget=type("FakeWidget", (), {}))
+    fake_pyqt6 = types.SimpleNamespace(QtWidgets=fake_qtwidgets)
+    mocker.patch.dict(
+        sys.modules,
+        {
+            "PyQt6": fake_pyqt6,
+            "PyQt6.QtWidgets": fake_qtwidgets,
+        },
+    )
+    qt_widget = fake_qtwidgets.QWidget()
+    assert is_qwidget(qt_widget) is True
+    assert is_qwidget(object()) is False
+
+    canvas = fig.canvas
+    assert attached_canvas_widget(fig, lambda obj: obj is canvas) is canvas
+    backend_qtagg = types.SimpleNamespace()
+    create = mocker.Mock(return_value="canvas-widget")
+    backend_qtagg.FigureCanvasQTAgg = create
+    mocker.patch.dict(
+        sys.modules,
+        {"matplotlib.backends.backend_qtagg": backend_qtagg},
+    )
+    assert attached_canvas_widget(fig, lambda obj: False) == "canvas-widget"
+    create.assert_called_once_with(fig)
 
 
 def test_build_plot_surface_delegates_to_factory(mocker) -> None:
