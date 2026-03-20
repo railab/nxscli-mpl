@@ -5,7 +5,6 @@ from enum import Enum
 from functools import partial
 from typing import TYPE_CHECKING, Any, Generator
 
-import numpy as np
 from matplotlib.animation import FFMpegWriter, PillowWriter
 from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
 from nxscli.logger import logger
@@ -19,6 +18,17 @@ from nxscli_mpl._animation_lifecycle import (
 )
 from nxscli_mpl._mpl_manager import MplManager
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
+from nxscli_mpl._plot_lifecycle import (
+    attached_canvas_widget,
+)
+from nxscli_mpl._plot_lifecycle import (
+    clear_animations as clear_plot_animations,
+)
+from nxscli_mpl._plot_lifecycle import (
+    clear_plot_data,
+    close_surface,
+    is_qwidget,
+)
 from nxscli_mpl._plot_surface import (
     build_axes,
     expand_formats,
@@ -35,6 +45,7 @@ from nxscli_mpl._plot_surface import (
 )
 
 if TYPE_CHECKING:
+    import numpy as np
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
@@ -90,7 +101,7 @@ class PluginAnimationCommonMpl:
 
     def _animation_frames_blocks(
         self, qdata: PluginQueueData
-    ) -> tuple[list[np.ndarray[Any, Any]], list[np.ndarray[Any, Any]]]:
+    ) -> tuple[list["np.ndarray[Any, Any]"], list["np.ndarray[Any, Any]"]]:
         xdata, ydata, self._cnt = fetch_animation_frame(qdata, count=self._cnt)
         return xdata, ydata
 
@@ -309,58 +320,28 @@ class PluginPlotMpl(PluginData):
 
     def ani_clear(self) -> None:  # pragma: no cover
         """Clear animations."""
-        for ani in self._ani:
-            try:
-                ani.stop()
-            except Exception:
-                pass
-        self._ani = []
+        self._ani = clear_plot_animations(self._ani)
 
     def plot_clear(self) -> None:
         """Clear plot data."""
-        if len(self._ax) > 0:  # pragma: no cover
-            for ax in self._ax:
-                if ax is not None:
-                    ax.cla()
+        clear_plot_data(self._ax)
 
     def close(self) -> None:
         """Close figure and attached widget."""
         fig = getattr(self, "_fig", None)
         if fig is not None:
-            MplManager.close(fig)
             del self._fig
-
-        widget = getattr(self, "_widget", None)
-        if widget is not None:
-            close = getattr(widget, "close", None)
-            if callable(close):
-                close()
-            self._widget = None
+        self._widget = close_surface(
+            fig, getattr(self, "_widget", None), MplManager.close
+        )
 
     def _attached_canvas_widget(self) -> Any:  # pragma: no cover
         """Return a QWidget-compatible matplotlib canvas for attached mode."""
-        canvas = getattr(self._fig, "canvas", None)
-        if self._is_qwidget(canvas):
-            return canvas
-
-        try:
-            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-        except Exception:
-            logger.warning(
-                "attached matplotlib mode requires Qt canvas backend"
-            )
-            return None
-
-        figure_canvas = FigureCanvasQTAgg
-        return figure_canvas(self._fig)  # type: ignore[no-untyped-call]
+        return attached_canvas_widget(self._fig, self._is_qwidget)
 
     @staticmethod
     def _is_qwidget(obj: Any) -> bool:  # pragma: no cover
-        try:
-            import PyQt6.QtWidgets as QtWidgets  # type: ignore[import-not-found]  # noqa: N813,E501
-        except Exception:
-            return False
-        return isinstance(obj, QtWidgets.QWidget)
+        return is_qwidget(obj)
 
     def get_vector_states(self) -> list["PlotVectorState"]:
         """Get current vector visibility state."""
