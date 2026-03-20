@@ -1,7 +1,5 @@
 """The matplotlib plot specific module."""
 
-from dataclasses import dataclass
-from enum import Enum
 from functools import partial
 from typing import TYPE_CHECKING, Any, Generator
 
@@ -17,7 +15,9 @@ from nxscli_mpl._animation_lifecycle import (
     update_animation_common,
 )
 from nxscli_mpl._mpl_manager import MplManager
+from nxscli_mpl._plot_api import EPlotMode, PlotVectorState
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
+from nxscli_mpl._plot_factory import create_plot_surface
 from nxscli_mpl._plot_lifecycle import (
     attached_canvas_widget,
 )
@@ -57,7 +57,31 @@ __all__ = [
     "MplManager",
     "PlotDataCommon",
     "PlotDataAxesMpl",
+    "PluginAnimationCommonMpl",
+    "PluginPlotMpl",
+    "EPlotMode",
+    "PlotVectorState",
+    "create_plot_surface",
+    "build_plot_surface",
 ]
+
+
+def build_plot_surface(
+    phandler: Any, kwargs: dict[str, Any]
+) -> "PluginPlotMpl":
+    """Build plot surface from plugin handler and runtime kwargs."""
+    chanlist = phandler.chanlist_plugin(kwargs["channels"])
+    trig = phandler.triggers_plugin(chanlist, kwargs["trig"])
+    cb = phandler.cb_get()
+    return create_plot_surface(
+        chanlist=chanlist,
+        trig=trig,
+        cb=cb,
+        dpi=kwargs["dpi"],
+        fmt=kwargs["fmt"],
+        mode=str(kwargs.get("plot_mode", "detached")),
+        parent=kwargs.get("plot_parent"),
+    )
 
 
 ###############################################################################
@@ -357,67 +381,3 @@ class PluginPlotMpl(PluginData):
             vector=vector,
             visible=visible,
         )
-
-
-class EPlotMode(Enum):
-    """Available plot display modes."""
-
-    DETACHED = "detached"
-    ATTACHED = "attached"
-
-    @classmethod
-    def from_text(cls, value: str) -> "EPlotMode":
-        """Parse mode string with safe fallback."""
-        for mode in cls:
-            if mode.value == value:
-                return mode
-        return cls.DETACHED
-
-
-@dataclass(frozen=True)
-class PlotVectorState:
-    """Per-vector visibility state."""
-
-    channel: int
-    vector: int
-    visible: bool
-
-
-def create_plot_surface(
-    chanlist: list["DeviceChannel"],
-    trig: list["TriggerHandler"],
-    cb: PluginDataCb,
-    dpi: float = 100.0,
-    fmt: list[str] | None = None,
-    mode: str = "detached",
-    parent: Any = None,
-) -> PluginPlotMpl:
-    """Create plot surface in detached or attached mode."""
-    return PluginPlotMpl(
-        chanlist=chanlist,
-        trig=trig,
-        cb=cb,
-        dpi=dpi,
-        fmt=fmt,
-        mode=mode,
-        parent=parent,
-    )
-
-
-def build_plot_surface(
-    phandler: Any,
-    kwargs: dict[str, Any],
-) -> PluginPlotMpl:
-    """Build plot surface from plugin handler and runtime kwargs."""
-    chanlist = phandler.chanlist_plugin(kwargs["channels"])
-    trig = phandler.triggers_plugin(chanlist, kwargs["trig"])
-    cb = phandler.cb_get()
-    return create_plot_surface(
-        chanlist=chanlist,
-        trig=trig,
-        cb=cb,
-        dpi=kwargs["dpi"],
-        fmt=kwargs["fmt"],
-        mode=str(kwargs.get("plot_mode", "detached")),
-        parent=kwargs.get("plot_parent"),
-    )
