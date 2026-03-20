@@ -9,8 +9,8 @@ import numpy as np
 from matplotlib.animation import FFMpegWriter, PillowWriter
 from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
 from nxscli.logger import logger
-from nxslib.nxscope import DNxscopeStreamBlock
 
+from nxscli_mpl._animation_common import fetch_animation_frame
 from nxscli_mpl._mpl_manager import MplManager
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
 
@@ -88,50 +88,7 @@ class PluginAnimationCommonMpl:
     def _animation_frames_blocks(
         self, qdata: PluginQueueData
     ) -> tuple[list[np.ndarray[Any, Any]], list[np.ndarray[Any, Any]]]:
-        x_chunks: list[np.ndarray[Any, Any]] = []
-        y_chunks: list[list[np.ndarray[Any, Any]]] = [
-            [] for _ in range(self._qdata.vdim)
-        ]
-
-        # limit to 100 samples per frame
-        for _ in range(100):
-            data = qdata.queue_get(block=False)
-            if not data:
-                break
-
-            if not isinstance(data, list):
-                raise RuntimeError("plot animation queue payload must be list")
-
-            for block in data:
-                if not isinstance(block, DNxscopeStreamBlock):
-                    raise RuntimeError(
-                        "plot animation requires DNxscopeStreamBlock payload"
-                    )
-                block_data = block.data
-                assert isinstance(block_data, np.ndarray)
-                nsamples = int(block_data.shape[0])
-                if nsamples == 0:
-                    continue
-                xr = np.arange(self._cnt, self._cnt + nsamples)
-                x_chunks.append(xr)
-                for i in range(self._qdata.vdim):
-                    y_chunks[i].append(block_data[:, i])
-                self._cnt += nsamples
-
-        xcat = (
-            np.concatenate(x_chunks)
-            if x_chunks
-            else np.empty((0,), dtype=np.int64)
-        )
-        xdata = [xcat for _ in range(self._qdata.vdim)]
-        ydata = [
-            (
-                np.concatenate(chunks)
-                if chunks
-                else np.empty((0,), dtype=np.float64)
-            )
-            for chunks in y_chunks
-        ]
+        xdata, ydata, self._cnt = fetch_animation_frame(qdata, count=self._cnt)
         return xdata, ydata
 
     def _animation_update(
