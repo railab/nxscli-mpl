@@ -2,6 +2,8 @@
 
 from typing import TYPE_CHECKING, Any
 
+from nxscli_mpl._plot_constants import DEFAULT_DPI
+
 if TYPE_CHECKING:
     from nxscli.idata import PluginDataCb
     from nxscli.trigger import TriggerHandler
@@ -14,7 +16,7 @@ def create_plot_surface(
     chanlist: list["DeviceChannel"],
     trig: list["TriggerHandler"],
     cb: "PluginDataCb",
-    dpi: float = 100.0,
+    dpi: float = DEFAULT_DPI,
     fmt: list[str] | None = None,
     mode: str = "detached",
     parent: Any = None,

@@ -5,14 +5,12 @@ from typing import TYPE_CHECKING, Any
 from nxscli.iplugin import IPluginPlotDynamic
 from nxslib.nxscope import DNxscopeStreamBlock
 
+from nxscli_mpl._plot_constants import WINDOWED_QUEUE_DRAIN_LIMIT
 from nxscli_mpl.plot_mpl import MplManager, PluginPlotMpl, build_plot_surface
 
 if TYPE_CHECKING:
     from matplotlib.animation import FuncAnimation
     from nxscli.idata import PluginQueueData
-
-
-_QUEUE_DRAIN_LIMIT = 50
 
 
 class _PluginWindowedBase(IPluginPlotDynamic):
@@ -80,7 +78,7 @@ class _PluginFuncAnimationWindowedBase(_PluginWindowedBase):
 def _read_channel_values(qdata: "PluginQueueData") -> list[float]:
     """Drain one-vector stream payloads into a flat float list."""
     vals: list[float] = []
-    for _ in range(_QUEUE_DRAIN_LIMIT):
+    for _ in range(WINDOWED_QUEUE_DRAIN_LIMIT):
         payload = qdata.queue_get(block=False)
         if not payload:
             break
@@ -102,7 +100,7 @@ def _read_channel_pair(
     """Drain two-vector stream payloads into paired float lists."""
     xs: list[float] = []
     ys: list[float] = []
-    for _ in range(_QUEUE_DRAIN_LIMIT):
+    for _ in range(WINDOWED_QUEUE_DRAIN_LIMIT):
         payload = qdata.queue_get(block=False)
         if not payload:
             break
