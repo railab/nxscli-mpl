@@ -16,6 +16,9 @@ from nxscli_mpl._animation_lifecycle import (
     stop_animation,
     update_animation_common,
 )
+from nxscli_mpl._plot_factory import (
+    build_plot_surface as build_plot_surface_private,
+)
 from nxscli_mpl._plot_lifecycle import (
     attached_canvas_widget,
     clear_animations,
@@ -345,6 +348,38 @@ def test_build_plot_surface_delegates_to_factory(mocker) -> None:
     )
 
     out = build_plot_surface(
+        handler,
+        {
+            "channels": [1, 2],
+            "trig": ["always"],
+            "dpi": 123,
+            "fmt": ["o"],
+            "plot_mode": "attached",
+            "plot_parent": "parent",
+        },
+    )
+
+    assert out is surface
+    create.assert_called_once_with(
+        chanlist=["chan-1", "chan-2"],
+        trig=[("trig", ["chan-1", "chan-2"], ["always"])],
+        cb=handler.cb,
+        dpi=123,
+        fmt=["o"],
+        mode="attached",
+        parent="parent",
+    )
+
+
+def test_private_build_plot_surface_delegates_to_factory(mocker) -> None:
+    """Private build helper should normalize handler callbacks once."""
+    handler = RecordingPluginHandler()
+    surface = object()
+    create = mocker.patch(
+        "nxscli_mpl._plot_factory.create_plot_surface", return_value=surface
+    )
+
+    out = build_plot_surface_private(
         handler,
         {
             "channels": [1, 2],

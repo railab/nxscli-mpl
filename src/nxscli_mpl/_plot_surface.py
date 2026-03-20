@@ -9,8 +9,8 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
     from nxslib.dev import DeviceChannel
 
+    from nxscli_mpl._plot_api import PlotVectorState
     from nxscli_mpl._plot_data import PlotDataAxesMpl
-    from nxscli_mpl.plot_mpl import PlotVectorState
 
 
 def numerical_channels(
