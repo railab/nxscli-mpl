@@ -9,6 +9,11 @@ from nxscli.trigger import DTriggerConfig, ETriggerType, TriggerHandler
 from nxslib.dev import DeviceChannel
 from nxslib.nxscope import DNxscopeStreamBlock
 
+from nxscli_mpl._animation_lifecycle import (
+    setup_writer,
+    stop_animation,
+    update_animation_common,
+)
 from nxscli_mpl.plot_mpl import (
     EPlotMode,
     MplManager,
@@ -238,6 +243,46 @@ def test_pluginanimationcommonmpl_init_and_start_delegate(mocker) -> None:
     assert ani._writer is None
     assert ani._ani == "animation"
     func_animation.assert_called_once()
+
+
+def test_mpl_animation_lifecycle_helpers(mocker) -> None:
+    """Private lifecycle helpers should handle writer and frame flow."""
+    fig = Figure()
+    gif_writer = mocker.patch(
+        "nxscli_mpl._animation_lifecycle.PillowWriter",
+        return_value=mocker.Mock(),
+    )
+    assert setup_writer(fig, "") is None
+    writer = setup_writer(fig, "out.gif")
+    gif_writer.assert_called_once_with(fps=10)
+    writer.setup.assert_called_once_with(fig, "out.gif")
+    mp4_writer = mocker.patch(
+        "nxscli_mpl._animation_lifecycle.FFMpegWriter",
+        return_value=mocker.Mock(),
+    )
+    writer_mp4 = setup_writer(fig, "out.mp4")
+    mp4_writer.assert_called_once_with(fps=10, bitrate=200)
+    writer_mp4.setup.assert_called_once_with(fig, "out.mp4")
+    with pytest.raises(TypeError):
+        setup_writer(fig, "out.bin")
+
+    lines = [mocker.Mock()]
+    updater = mocker.Mock(return_value=lines)
+    out = update_animation_common(([[1.0]], [[2.0]]), lines, updater, writer)
+    assert out is lines
+    writer.grab_frame.assert_called_once()
+    assert update_animation_common(([], []), lines, updater, None) is lines
+    assert (
+        update_animation_common(([[1.0]], [[2.0]]), lines, updater, None)
+        is lines
+    )
+
+    ani = mocker.Mock()
+    ani.event_source = object()
+    stop_animation(ani, writer)
+    ani.pause.assert_called_once()
+    writer.finish.assert_called_once()
+    stop_animation(mocker.Mock(event_source=None), None)
 
 
 def test_build_plot_surface_delegates_to_factory(mocker) -> None:

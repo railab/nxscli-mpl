@@ -11,6 +11,12 @@ from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
 from nxscli.logger import logger
 
 from nxscli_mpl._animation_common import fetch_animation_frame
+from nxscli_mpl._animation_lifecycle import (
+    setup_writer,
+    start_animation,
+    stop_animation,
+    update_animation_common,
+)
 from nxscli_mpl._mpl_manager import MplManager
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
 
@@ -57,24 +63,7 @@ class PluginAnimationCommonMpl:
         self._qdata = qdata
         self._ani = None
         self._writer: PillowWriter | FFMpegWriter | None
-
-        if write:  # pragma: no cover
-            fps = 10
-            logger.info("writer animation to file=%s, fps=%d", write, fps)
-
-            tmp = write.split(".")
-            if tmp[-1] == "gif":
-                self._writer = PillowWriter(fps=fps)
-            elif tmp[-1] == "mp4":
-                bitrate = 200
-                self._writer = FFMpegWriter(fps=fps, bitrate=bitrate)
-            else:
-                raise TypeError
-
-            # NOTE: dpi arg set cause overlapping animation
-            self._writer.setup(self._fig, write)
-        else:
-            self._writer = None
+        self._writer = setup_writer(self._fig, write)
 
     def _animation_init(self, pdata: PlotDataAxesMpl) -> list["Line2D"]:
         return pdata.lns
@@ -103,48 +92,30 @@ class PluginAnimationCommonMpl:
 
     def stop(self) -> None:  # pragma: no cover
         """Stop animation."""
-        # TODO: stop animation
-        if self._ani:
-            if self._ani.event_source:
-                self._ani.pause()
-        if self._writer:
-            self._writer.finish()
-
+        stop_animation(self._ani, self._writer)
         del self._ani
 
     def _animation_update_cmn(
         self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
     ) -> list["Line2D"]:  # pragma: no cover
         """Update animation common logic."""
-        # no data
-        if len(frame[0]) == 0 or len(frame[1]) == 0:
-            return pdata.lns
-
-        # implementation specific
-        lines = self._animation_update(frame, pdata)
-        assert lines
-
-        # handle writer
-        if self._writer:
-            # self._fig.canvas.flush_events()
-            self._writer.grab_frame()
-
-        return lines
+        return update_animation_common(
+            frame,
+            pdata.lns,
+            lambda current: self._animation_update(current, pdata),
+            self._writer,
+        )
 
     def start(self) -> None:
         """Start an animation."""
-        fig = self._fig
         update = partial(self._animation_update_cmn, pdata=self._pdata)
         frames = partial(self._animation_frames, qdata=self._qdata)
         init = partial(self._animation_init, pdata=self._pdata)
-        self._ani = MplManager.func_animation(
-            fig=fig,
-            func=update,
+        self._ani = start_animation(
+            fig=self._fig,
+            update=update,
             frames=frames,
-            init_func=init,
-            interval=1,
-            blit=True,
-            cache_frame_data=False,
+            init=init,
         )
 
     def xaxis_disable(self) -> None:  # pragma: no cover
