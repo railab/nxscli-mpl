@@ -19,6 +19,20 @@ from nxscli_mpl._animation_lifecycle import (
 )
 from nxscli_mpl._mpl_manager import MplManager
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
+from nxscli_mpl._plot_surface import (
+    build_axes,
+    expand_formats,
+)
+from nxscli_mpl._plot_surface import (
+    get_vector_states as get_plot_vector_states,
+)
+from nxscli_mpl._plot_surface import (
+    init_plot_data,
+    numerical_channels,
+)
+from nxscli_mpl._plot_surface import (
+    set_vector_visible as set_plot_vector_visible,
+)
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -231,15 +245,7 @@ class PluginPlotMpl(PluginData):
         :param fmt: plot format
         """
         logger.info("prepare plot %s", str(chanlist))
-        newchanlist = []
-        for chan in chanlist:
-            # get only numerical channels
-            if chan.data.is_numerical:
-                newchanlist.append(chan)
-            else:  # pragma: no cover
-                logger.info(
-                    "NOTE: channel %d not numerical - ignore", chan.data.chan
-                )
+        newchanlist = numerical_channels(chanlist)
         assert len(newchanlist) == len(trig)
 
         super().__init__(newchanlist, trig, cb)
@@ -252,27 +258,14 @@ class PluginPlotMpl(PluginData):
         if self._mode is EPlotMode.ATTACHED:
             self._widget = self._attached_canvas_widget()
 
-        self._fmt: list[Any]
-        if not fmt:
-            # defaul configuration for all
-            self._fmt = [None for _ in range(len(self._chanlist))]
-        elif len(self._chanlist) != 1 and len(fmt) == 1:
-            # the same format for all channels - extend fmt for all channels
-            self._fmt = [
-                [fmt[0]] * self._chanlist[i].data.vdim
-                for i in range(len(self._chanlist))
-            ]
-        else:
-            # individual fmt for all channels
-            assert len(fmt) == len(
-                self._chanlist
-            ), "fmt must be specified for all configured channels"
-            self._fmt = fmt
-
-        # add subplots
-        self._add_subplots(newchanlist)
-
-        self._plist = self._plist_init()
+        self._fmt = expand_formats(self._chanlist, fmt)
+        self._ax = build_axes(self._fig, newchanlist)
+        self._plist = init_plot_data(
+            self._chanlist,
+            self._ax,
+            self._fmt,
+            PlotDataAxesMpl,
+        )
 
     def __del__(self) -> None:
         """Close figure and clean queue handlers."""
@@ -281,49 +274,6 @@ class PluginPlotMpl(PluginData):
         except Exception:
             pass
         super().__del__()
-
-    def _plist_init(self) -> list[PlotDataAxesMpl]:
-        ret = []
-        for i, channel in enumerate(self._chanlist):
-            logger.info(
-                "intialize PlotDataAxesMpl chan=%d vdim=%d fmt=%s",
-                channel.data.chan,
-                channel.data.vdim,
-                self._fmt[i],
-            )
-            # initialize plot
-            pdata = PlotDataAxesMpl(self._ax[i], channel, fmt=self._fmt[i])
-            # add plot to list
-            ret.append(pdata)
-        return ret
-
-    def _add_subplots(self, channels: list["DeviceChannel"]) -> None:
-        """Create subplots from channels list."""
-        # remove all current axes
-        for ax in self._ax:  # pragma: no cover
-            if ax is not None:
-                self._fig.delaxes(ax)
-                # ax.remove()
-            else:
-                pass
-        self._ax = []
-
-        # show plots only for numerical channels
-        chanlist = []
-        for chan in channels:
-            if chan.data.is_numerical:
-                chanlist.append(chan.data.chan)
-            else:  # pragma: no cover
-                pass
-
-        row = len(chanlist)
-        col = 1
-
-        i = 1
-        for _ in range(len(chanlist)):
-            # create subplot for all used numerical channels
-            self._ax.append(self._fig.add_subplot(row, col, i))
-            i += 1
 
     @property
     def fig(self) -> "Figure":
@@ -414,37 +364,18 @@ class PluginPlotMpl(PluginData):
 
     def get_vector_states(self) -> list["PlotVectorState"]:
         """Get current vector visibility state."""
-        states: list[PlotVectorState] = []
-        for pdata in self._plist:
-            for vector, line in enumerate(pdata.lns):
-                states.append(
-                    PlotVectorState(
-                        channel=pdata.chan,
-                        vector=vector,
-                        visible=bool(line.get_visible()),
-                    )
-                )
-        return states
+        return get_plot_vector_states(self._plist, PlotVectorState)
 
     def set_vector_visible(
         self, channel: int, vector: int, visible: bool
     ) -> None:
         """Set vector visibility in real time."""
-        for pdata in self._plist:
-            if pdata.chan != channel:
-                continue
-            if vector < 0 or vector >= len(pdata.lns):
-                raise ValueError(
-                    f"Invalid vector index {vector} for channel {channel}"
-                )
-            pdata.lns[vector].set_visible(visible)
-            canvas = pdata.ax.figure.canvas
-            if canvas is not None:
-                draw_idle = getattr(canvas, "draw_idle", None)
-                if callable(draw_idle):  # pragma: no cover
-                    draw_idle()
-            return
-        raise ValueError(f"Channel {channel} not found")
+        set_plot_vector_visible(
+            self._plist,
+            channel=channel,
+            vector=vector,
+            visible=visible,
+        )
 
 
 class EPlotMode(Enum):
