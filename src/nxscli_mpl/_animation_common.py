@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from nxslib.nxscope import DNxscopeStreamBlock
 
+from nxscli_mpl._plot_constants import ANIMATION_FRAME_DRAIN_LIMIT
+
 if TYPE_CHECKING:
     from nxscli.idata import PluginQueueData
 
@@ -13,7 +15,7 @@ def fetch_animation_frame(
     qdata: "PluginQueueData",
     *,
     count: int,
-    limit: int = 100,
+    limit: int = ANIMATION_FRAME_DRAIN_LIMIT,
 ) -> tuple[list[np.ndarray[Any, Any]], list[np.ndarray[Any, Any]], int]:
     """Drain one animation frame from the queue and return updated counters."""
     x_chunks: list[np.ndarray[Any, Any]] = []

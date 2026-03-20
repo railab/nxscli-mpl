@@ -16,6 +16,7 @@ from nxscli_mpl._animation_lifecycle import (
 )
 from nxscli_mpl._mpl_manager import MplManager
 from nxscli_mpl._plot_api import EPlotMode, PlotVectorState
+from nxscli_mpl._plot_constants import DEFAULT_DPI
 from nxscli_mpl._plot_data import PlotDataAxesMpl, PlotDataCommon
 from nxscli_mpl._plot_factory import create_plot_surface
 from nxscli_mpl._plot_lifecycle import (
@@ -267,7 +268,7 @@ class PluginPlotMpl(PluginData):
         chanlist: list["DeviceChannel"],
         trig: list["TriggerHandler"],
         cb: PluginDataCb,
-        dpi: float = 100.0,
+        dpi: float = DEFAULT_DPI,
         fmt: list[str] | None = None,
         mode: str = "detached",
         parent: Any = None,

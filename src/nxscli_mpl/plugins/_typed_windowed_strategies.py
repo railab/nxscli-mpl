@@ -7,6 +7,12 @@ import numpy as np
 from nxscli.transforms.models import FftResult, HistogramResult
 from nxscli.transforms.operators_window import fft_spectrum, histogram_counts
 
+from nxscli_mpl._plot_constants import (
+    AXIS_DECAY_FACTOR,
+    AXIS_MIN_MAGNITUDE,
+    AXIS_PADDING_FACTOR,
+)
+
 
 @dataclass
 class WindowedTransformState:
@@ -51,7 +57,7 @@ def _lock_axis(  # pragma: no cover
     xmax: float | None,
     ymax: float,
 ) -> None:
-    ymax_safe = max(1e-9, float(ymax))
+    ymax_safe = max(AXIS_MIN_MAGNITUDE, float(ymax))
     if state.ymax_locked is None:
         state.ymax_locked = ymax_safe
     else:
@@ -59,11 +65,11 @@ def _lock_axis(  # pragma: no cover
         if ymax_safe > prev:
             state.ymax_locked = 0.85 * prev + 0.15 * ymax_safe
         else:
-            state.ymax_locked = max(ymax_safe, prev * 0.995)
+            state.ymax_locked = max(ymax_safe, prev * AXIS_DECAY_FACTOR)
 
     if xmax is not None:
         pdata.ax.set_xlim(0.0, float(xmax))
-    pdata.ax.set_ylim(0.0, float(state.ymax_locked) * 1.08)
+    pdata.ax.set_ylim(0.0, float(state.ymax_locked) * AXIS_PADDING_FACTOR)
 
 
 class FftWindowedStrategy:

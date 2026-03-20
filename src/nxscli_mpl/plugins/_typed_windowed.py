@@ -16,6 +16,13 @@ from nxscli.transforms.pipeline import (
     WindowUnaryProcessor,
 )
 
+from nxscli_mpl._plot_constants import (
+    AXIS_DECAY_FACTOR,
+    AXIS_MIN_MAGNITUDE,
+    AXIS_PADDING_FACTOR,
+    RELATION_TIMER_INTERVAL_MS,
+    XY_PADDING_RATIO,
+)
 from nxscli_mpl.animation_mpl import _create_matplotlib_inputhook
 from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
 from nxscli_mpl.plugins._typed_windowed_strategies import (
@@ -233,7 +240,7 @@ class _RelationWindowedBase(_PluginFuncAnimationWindowedBase):
         self._ani = FuncAnimation(
             fig=self._plot.fig,
             func=lambda *_: self._update_relation(),
-            interval=30,
+            interval=RELATION_TIMER_INTERVAL_MS,
             blit=False,
             cache_frame_data=False,
         )
@@ -321,8 +328,8 @@ class _PluginXyWindowed(_RelationWindowedBase):
             xmax = float(np.max(rel.x))
             ymin = float(np.min(rel.y))
             ymax = float(np.max(rel.y))
-            padx = max(1e-9, (xmax - xmin) * 0.1)
-            pady = max(1e-9, (ymax - ymin) * 0.1)
+            padx = max(AXIS_MIN_MAGNITUDE, (xmax - xmin) * XY_PADDING_RATIO)
+            pady = max(AXIS_MIN_MAGNITUDE, (ymax - ymin) * XY_PADDING_RATIO)
             cur_xlim = (xmin - padx, xmax + padx)
             cur_ylim = (ymin - pady, ymax + pady)
             if self._xlim is None:
@@ -426,8 +433,11 @@ class _PluginPolarWindowed(_RelationWindowedBase):
             if self._rmax is None:
                 self._rmax = cur
             else:
-                self._rmax = max(cur, self._rmax * 0.995)
-            self._polar_ax.set_ylim(0.0, max(1e-9, self._rmax) * 1.08)
+                self._rmax = max(cur, self._rmax * AXIS_DECAY_FACTOR)
+            self._polar_ax.set_ylim(
+                0.0,
+                max(AXIS_MIN_MAGNITUDE, self._rmax) * AXIS_PADDING_FACTOR,
+            )
 
         return self._polar_lines
 

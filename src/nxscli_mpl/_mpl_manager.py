@@ -8,6 +8,8 @@ from matplotlib import _pylab_helpers
 from matplotlib.animation import FuncAnimation
 from nxscli.logger import logger
 
+from nxscli_mpl._plot_constants import DEFAULT_DPI
+
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
@@ -49,7 +51,7 @@ class MplManager:
         plt.style.use(style)
 
     @staticmethod
-    def figure(dpi: float = 100.0) -> "Figure":
+    def figure(dpi: float = DEFAULT_DPI) -> "Figure":
         """Get figure."""
         return plt.figure(dpi=dpi)
 
