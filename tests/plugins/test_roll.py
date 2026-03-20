@@ -33,4 +33,4 @@ def test_plugin_roll_start_sets_limits_and_returns_animation() -> None:
     assert pdata.samples_max == 64
     assert pdata.xlim == (0, 64)
     assert ani._fig is fig
-    assert ani._qdata is qdata
+    assert ani._queue_data is qdata

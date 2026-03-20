@@ -90,9 +90,11 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         """Start animation with blit disabled for transformed axes redraw."""
         ani = FuncAnimation(
             fig=self._fig,
-            func=lambda frame: self._animation_update_cmn(frame, self._pdata),
-            frames=lambda: self._animation_frames(self._qdata),
-            init_func=lambda: self._animation_init(self._pdata),
+            func=lambda frame: self._animation_update_cmn(
+                frame, self._plot_data
+            ),
+            frames=lambda: self._animation_frames(self._queue_data),
+            init_func=lambda: self._animation_init(self._plot_data),
             interval=30,
             blit=False,
             cache_frame_data=False,
