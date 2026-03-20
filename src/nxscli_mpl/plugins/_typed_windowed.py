@@ -27,6 +27,7 @@ from nxscli_mpl.animation_mpl import _create_matplotlib_inputhook
 from nxscli_mpl.plot_mpl import PluginAnimationCommonMpl
 from nxscli_mpl.plugins._typed_windowed_strategies import (
     WindowedTransformState,
+    _WindowedPlotDataLike,
     get_windowed_transform_strategy,
 )
 from nxscli_mpl.plugins._windowed_common import (
@@ -113,7 +114,7 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         outputs = self._pipeline.ingest(batch)
 
         self._strategy.update_plot(
-            pdata,
+            cast("_WindowedPlotDataLike", pdata),
             outputs,
             proc_names=self._proc_names,
             state=self._strategy_state,
