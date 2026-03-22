@@ -7,10 +7,16 @@ import pytest  # type: ignore
 from matplotlib.axes import Axes  # type: ignore
 from matplotlib.figure import Figure  # type: ignore
 from nxscli.idata import PluginData, PluginDataCb, PluginQueueData
-from nxscli.trigger import DTriggerConfig, ETriggerType, TriggerHandler
+from nxscli.trigger import (
+    DTriggerConfig,
+    DTriggerEvent,
+    ETriggerType,
+    TriggerHandler,
+)
 from nxslib.dev import DeviceChannel
 from nxslib.nxscope import DNxscopeStreamBlock
 
+from nxscli_mpl._animation_common import fetch_animation_frame
 from nxscli_mpl._animation_lifecycle import (
     setup_writer,
     stop_animation,
@@ -95,7 +101,13 @@ def test_plotdataaxesmpl():
     x.plot_title = "test"
     assert x.plot_title == "test"
 
+    x.xdata_extend([[0, 1], [0, 1]])
+    x.ydata_extend([[2, 3], [4, 5]])
     x.plot()
+    assert x.trigger_line.get_visible() is False
+    x.set_trigger_marker(3.5)
+    x.plot()
+    assert x.trigger_line.get_visible() is True
     x.xaxis_disable()
     x.xaxis_set_ticks([])
 
@@ -104,6 +116,18 @@ def test_plotdataaxesmpl():
 
     x = PlotDataAxesMpl(axes, chan, fmt=["o", "b"])
     assert x._fmt == ["o", "b"]
+
+
+def test_plotdataaxesmpl_plot_without_explicit_xdata() -> None:
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    pdata = PlotDataAxesMpl(axes, chan)
+
+    pdata.ydata_extend([[1, 2, 3]])
+    pdata.plot()
+
+    assert len(axes.lines) >= 2
 
 
 def test_mplmanager_func_animation_delegates(mocker) -> None:
@@ -132,6 +156,44 @@ def test_pluginanimationcommonmpl():
 
     x.stop()
     # TODO
+
+
+def test_fetch_animation_frame_returns_trigger_marker() -> None:
+    class FakeQueueData:
+        vdim = 1
+
+        def __init__(self) -> None:
+            self._payloads = [
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[1.0], [2.0], [3.0]]),
+                        meta=None,
+                    )
+                ],
+                [],
+            ]
+            self._event = DTriggerEvent(
+                sample_index=1,
+                channel=7,
+                capture_mode="start_after",
+            )
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            return self._payloads.pop(0)
+
+        def pop_trigger_event(self) -> DTriggerEvent | None:
+            event = self._event
+            self._event = None
+            return event
+
+    qdata = FakeQueueData()
+
+    xdata, ydata, next_count, trigger_x = fetch_animation_frame(qdata, count=4)
+
+    assert next_count == 7
+    assert trigger_x == 5
+    assert np.array_equal(xdata[0], np.array([4, 5, 6]))
+    assert np.array_equal(ydata[0], np.array([1.0, 2.0, 3.0]))
 
 
 def dummy_stream_sub(ch):
@@ -428,9 +490,10 @@ def test_pluginanimationcommonmpl_numpy_frames():
     qdata = FakeQueueData()
     ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
     frames = ani._animation_frames(qdata)
-    xdata, ydata = next(frames)
+    xdata, ydata, trigger_x = next(frames)
     assert [x.tolist() for x in xdata] == [[0, 1], [0, 1]]
     assert [y.tolist() for y in ydata] == [[1.0, 3.0], [2.0, 4.0]]
+    assert trigger_x is None
 
 
 def test_pluginanimationcommonmpl_rejects_sample_payload() -> None:
@@ -515,9 +578,10 @@ def test_pluginanimationcommonmpl_numpy_frames_empty_block_and_loop_limit():
     pdata = PlotDataAxesMpl(axes, chan)
     qdata = FakeQueueData()
     ani = PluginAnimationCommonMpl(fig, pdata, qdata, "")
-    xdata, ydata = next(ani._animation_frames(qdata))
+    xdata, ydata, trigger_x = next(ani._animation_frames(qdata))
     assert len(xdata[0]) == 99
     assert len(ydata[0]) == 99
+    assert trigger_x is None
     assert qdata.queue_get(block=False) == []
 
 

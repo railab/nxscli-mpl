@@ -105,7 +105,9 @@ class _WindowedTypedAnimation(PluginAnimationCommonMpl):
         # warning that pytest treats as failure.
 
     def _animation_update(  # pragma: no cover
-        self, frame: tuple[list[Any], list[Any]], pdata: "PlotDataAxesMpl"
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: "PlotDataAxesMpl",
     ) -> list[Any]:
         pdata.xdata_extend_max(frame[0])
         pdata.ydata_extend_max(frame[1])

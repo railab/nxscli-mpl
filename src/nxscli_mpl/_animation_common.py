@@ -16,13 +16,19 @@ def fetch_animation_frame(
     *,
     count: int,
     limit: int = ANIMATION_FRAME_DRAIN_LIMIT,
-) -> tuple[list[np.ndarray[Any, Any]], list[np.ndarray[Any, Any]], int]:
+) -> tuple[
+    list[np.ndarray[Any, Any]],
+    list[np.ndarray[Any, Any]],
+    int,
+    float | None,
+]:
     """Drain one animation frame from the queue and return updated counters."""
     x_chunks: list[np.ndarray[Any, Any]] = []
     y_chunks: list[list[np.ndarray[Any, Any]]] = [
         [] for _ in range(qdata.vdim)
     ]
     next_count = count
+    trigger_x: float | None = None
 
     for _ in range(limit):
         data = qdata.queue_get(block=False)
@@ -30,6 +36,11 @@ def fetch_animation_frame(
             break
         if not isinstance(data, list):
             raise RuntimeError("plot animation queue payload must be list")
+        event_getter = getattr(qdata, "pop_trigger_event", None)
+        event = event_getter() if callable(event_getter) else None
+        batch_start = next_count
+        if event is not None:
+            trigger_x = batch_start + event.sample_index
 
         for block in data:
             if not isinstance(block, DNxscopeStreamBlock):
@@ -61,4 +72,4 @@ def fetch_animation_frame(
         )
         for chunks in y_chunks
     ]
-    return xdata, ydata, next_count
+    return xdata, ydata, next_count, trigger_x

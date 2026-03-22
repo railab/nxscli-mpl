@@ -45,6 +45,12 @@ class _PluginStaticBase(PluginThread, IPluginPlotStatic):
                 ydata[i].extend(block_data[:, i])
 
         self._plot.plist[j].ydata_extend(ydata)
+        event_getter = getattr(pdata, "pop_trigger_event", None)
+        event = event_getter() if callable(event_getter) else None
+        if event is not None:
+            self._plot.plist[j].set_trigger_marker(
+                self._datalen[j] + event.sample_index
+            )
         self._datalen[j] = len(self._plot.plist[j].ydata[0])
 
     def _start_plot(self, kwargs: dict[str, Any]) -> bool:

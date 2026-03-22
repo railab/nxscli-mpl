@@ -36,12 +36,17 @@ class LiveAnimation(PluginAnimationCommonMpl):
         PluginAnimationCommonMpl.__init__(self, fig, pdata, qdata, write)
 
     def _animation_update(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
+        trigger_x: float | None = None,
     ) -> list["Line2D"]:  # pragma: no cover
         """Update an animation with dynamic scaling."""
+        del trigger_x
         # update sample
         pdata.xdata_extend(frame[0])
         pdata.ydata_extend(frame[1])
+        pdata.set_trigger_marker(frame[2])
 
         # update y scale
         self.yscale_extend(frame[1], pdata)
@@ -54,6 +59,9 @@ class LiveAnimation(PluginAnimationCommonMpl):
         for ln in pdata.lns:
             ln.set_data(pdata.xdata[i], pdata.ydata[i])
             i += 1
+        if pdata.trigger_x is not None:
+            pdata.trigger_line.set_xdata([pdata.trigger_x, pdata.trigger_x])
+            pdata.trigger_line.set_visible(True)
 
         return pdata.lns
 

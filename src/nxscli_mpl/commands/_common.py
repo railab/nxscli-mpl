@@ -18,6 +18,7 @@ def enable_plot_command(
 ) -> bool:
     """Enable a plot plugin while keeping CLI side effects consistent."""
     assert ctx.phandler
+    kwargs["nostop"] = False
 
     if samples == 0:  # pragma: no cover
         ctx.waitenter = True

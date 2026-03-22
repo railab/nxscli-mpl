@@ -48,9 +48,13 @@ def stop_animation(
 
 
 def update_animation_common(
-    frame: tuple[list[Any], list[Any]],
+    frame: tuple[list[Any], list[Any], float | None],
     default_lines: list["Line2D"],
-    updater: "Callable[[tuple[list[Any], list[Any]]], list[Line2D] | None]",
+    updater: (
+        "Callable["
+        "[tuple[list[Any], list[Any], float | None]], list[Line2D] | None"
+        "]"
+    ),
     writer: PillowWriter | FFMpegWriter | None,
 ) -> list["Line2D"]:
     """Handle empty-frame skipping and optional writer capture."""
