@@ -56,6 +56,13 @@ class PluginSnap(_PluginStaticBase):
 
         # plot all data
         for pdata in self._plot.plist:
+            if pdata.trigger_x is not None and pdata.ydata and pdata.ydata[0]:
+                rel_x = [
+                    idx - pdata.trigger_x for idx in range(len(pdata.ydata[0]))
+                ]
+                pdata.xdata_extend([rel_x[:] for _ in range(len(pdata.ydata))])
+                pdata.set_trigger_marker(0.0)
+                pdata.set_xlim((rel_x[0], rel_x[-1]))
             pdata.plot()
 
         self._save_plot()

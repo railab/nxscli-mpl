@@ -121,19 +121,23 @@ class PluginAnimationCommonMpl:
     def _animation_frames(
         self, qdata: PluginQueueData
     ) -> Generator[Any, None, None]:  # pragma: no cover
-        xdata, ydata = self._animation_frames_blocks(qdata)
-        yield xdata, ydata
+        xdata, ydata, trigger_x = self._animation_frames_blocks(qdata)
+        yield xdata, ydata, trigger_x
 
-    def _animation_frames_blocks(
-        self, qdata: PluginQueueData
-    ) -> tuple[list["np.ndarray[Any, Any]"], list["np.ndarray[Any, Any]"]]:
-        xdata, ydata, self._sample_count = fetch_animation_frame(
+    def _animation_frames_blocks(self, qdata: PluginQueueData) -> tuple[
+        list["np.ndarray[Any, Any]"],
+        list["np.ndarray[Any, Any]"],
+        float | None,
+    ]:
+        xdata, ydata, self._sample_count, trigger_x = fetch_animation_frame(
             qdata, count=self._sample_count
         )
-        return xdata, ydata
+        return xdata, ydata, trigger_x
 
     def _animation_update(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
     ) -> list["Line2D"] | None:
         pass  # pragma: no cover
 
@@ -148,7 +152,9 @@ class PluginAnimationCommonMpl:
         del self._ani
 
     def _animation_update_cmn(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
     ) -> list["Line2D"]:  # pragma: no cover
         """Update animation common logic."""
         return update_animation_common(

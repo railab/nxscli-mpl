@@ -48,17 +48,24 @@ class RollAnimation(PluginAnimationCommonMpl):
             self.xaxis_disable()
 
     def _animation_update(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
+        trigger_x: float | None = None,
     ) -> list["Line2D"]:  # pragma: no cover
+        del trigger_x
         return self._animation_update_priv(frame, pdata)
 
     def _animation_update_staticx(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
     ) -> list["Line2D"]:  # pragma: no cover
         """Update an animation with static X ticks."""
         # update sample
         pdata.xdata_extend_max(frame[0])
         pdata.ydata_extend_max(frame[1])
+        trigger_x = frame[2]
 
         # update y scale
         self.yscale_extend(frame[1], pdata)
@@ -68,11 +75,25 @@ class RollAnimation(PluginAnimationCommonMpl):
         for ln in pdata.lns:
             ln.set_data(xdata, pdata.ydata[i])
             i += 1
+        if trigger_x is not None and pdata.xdata[0]:
+            rel_trigger_x = trigger_x - pdata.xdata[0][0]
+            if 0 <= rel_trigger_x < len(pdata.ydata[0]):
+                pdata.set_trigger_marker(rel_trigger_x)
+                pdata.trigger_line.set_xdata([rel_trigger_x, rel_trigger_x])
+                pdata.trigger_line.set_visible(True)
+            else:
+                pdata.set_trigger_marker(None)
+                pdata.trigger_line.set_visible(False)
+        else:
+            pdata.set_trigger_marker(None)
+            pdata.trigger_line.set_visible(False)
 
         return pdata.lns
 
     def _animation_update_dynamicx(
-        self, frame: tuple[list[Any], list[Any]], pdata: PlotDataAxesMpl
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+        pdata: PlotDataAxesMpl,
     ) -> list["Line2D"]:  # pragma: no cover
         """Update an animation with dynamic X ticks."""
         xdata = frame[0]
@@ -84,6 +105,7 @@ class RollAnimation(PluginAnimationCommonMpl):
         # update sample
         pdata.xdata_extend_max(xdata)
         pdata.ydata_extend_max(ydata)
+        pdata.set_trigger_marker(frame[2])
 
         # update y scale
         self.yscale_extend(ydata, pdata)
@@ -96,6 +118,11 @@ class RollAnimation(PluginAnimationCommonMpl):
         for ln in pdata.lns:
             ln.set_data(pdata.xdata[i], pdata.ydata[i])
             i += 1
+        if pdata.trigger_x is not None:
+            pdata.trigger_line.set_xdata([pdata.trigger_x, pdata.trigger_x])
+            pdata.trigger_line.set_visible(True)
+        else:
+            pdata.trigger_line.set_visible(False)
 
         return pdata.lns
 

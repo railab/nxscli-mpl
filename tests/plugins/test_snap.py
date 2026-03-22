@@ -1,4 +1,5 @@
 import numpy as np
+from nxscli.trigger import DTriggerEvent
 from nxslib.dev import DeviceChannel
 from nxslib.nxscope import DNxscopeStreamBlock
 
@@ -34,7 +35,9 @@ def test_plugincapture_handle_blocks_updates_datalen() -> None:
     plugin = PluginSnap()
     plugin._plot = DummyPlot()
     plugin._datalen = [0]
-    pdata = type("Q", (), {"vdim": 2})()
+    pdata = type(
+        "Q", (), {"vdim": 2, "pop_trigger_event": lambda self: None}
+    )()
     plugin._handle_blocks(
         [
             DNxscopeStreamBlock(
@@ -47,6 +50,33 @@ def test_plugincapture_handle_blocks_updates_datalen() -> None:
     )
     assert plugin._plot.plist[0].ydata == [[1.0, 3.0], [2.0, 4.0]]
     assert plugin._datalen[0] == 2
+
+
+def test_plugincapture_handle_blocks_sets_trigger_marker() -> None:
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+
+    class DummyPlot:
+        def __init__(self) -> None:
+            self.plist = [PlotDataCommon(chan)]
+
+    class DummyQData:
+        vdim = 1
+
+        def pop_trigger_event(self):
+            return DTriggerEvent(
+                sample_index=1, channel=0, capture_mode="start_after"
+            )
+
+    plugin = PluginSnap()
+    plugin._plot = DummyPlot()
+    plugin._datalen = [2]
+    plugin._handle_blocks(
+        [DNxscopeStreamBlock(data=np.array([[5.0], [6.0]]), meta=None)],
+        DummyQData(),
+        0,
+    )
+
+    assert plugin._plot.plist[0].trigger_x == 3
 
 
 def test_plugincapture_thread_common_numpy_path() -> None:
@@ -88,6 +118,20 @@ def test_plugincapture_thread_common_numpy_path() -> None:
 
 def test_plugincapture_result_attached_mode_skips_show() -> None:
     class DummyPlotData:
+        def __init__(self) -> None:
+            self.trigger_x = None
+            self.ydata = [[]]
+            self.xdata = [[]]
+
+        def xdata_extend(self, data) -> None:  # noqa: ANN001
+            self.xdata = data
+
+        def set_trigger_marker(self, xpos) -> None:  # noqa: ANN001
+            self.trigger_x = xpos
+
+        def set_xlim(self, xlim) -> None:  # noqa: ANN001
+            self.xlim = xlim
+
         def plot(self) -> None:
             return
 
@@ -106,6 +150,12 @@ def test_plugincapture_result_attached_mode_skips_show() -> None:
     out = plugin.result()
 
     assert out is plugin._plot
+    plugin._plot.plist[0].xdata_extend([[0]])
+    plugin._plot.plist[0].set_trigger_marker(0.0)
+    plugin._plot.plist[0].set_xlim((0, 0))
+    assert plugin._plot.plist[0].xdata == [[0]]
+    assert plugin._plot.plist[0].trigger_x == 0.0
+    assert plugin._plot.plist[0].xlim == (0, 0)
 
 
 def test_plugincapture_result_detached_shows_figure_and_finalizes(
@@ -114,6 +164,18 @@ def test_plugincapture_result_detached_shows_figure_and_finalizes(
     class DummyPlotData:
         def __init__(self) -> None:
             self.plotted = False
+            self.trigger_x = None
+            self.ydata = [[]]
+            self.xdata = [[]]
+
+        def xdata_extend(self, data) -> None:  # noqa: ANN001
+            self.xdata = data
+
+        def set_trigger_marker(self, xpos) -> None:  # noqa: ANN001
+            self.trigger_x = xpos
+
+        def set_xlim(self, xlim) -> None:  # noqa: ANN001
+            self.xlim = xlim
 
         def plot(self) -> None:
             self.plotted = True
@@ -135,6 +197,9 @@ def test_plugincapture_result_detached_shows_figure_and_finalizes(
 
     assert out is plugin._plot
     assert plugin._plot.plist[0].plotted is True
+    plugin._plot.plist[0].xdata_extend([[0]])
+    plugin._plot.plist[0].set_trigger_marker(0.0)
+    plugin._plot.plist[0].set_xlim((0, 0))
     show.assert_called_once_with(block=False)
     info.assert_called_once_with("plot capture DONE")
 
@@ -202,6 +267,20 @@ def test_plugincapture_start_returns_false_for_empty_plot(mocker) -> None:
 
 def test_plugincapture_result_saves_when_write_set(mocker) -> None:
     class DummyPlotData:
+        def __init__(self) -> None:
+            self.trigger_x = None
+            self.ydata = [[]]
+            self.xdata = [[]]
+
+        def xdata_extend(self, data) -> None:  # noqa: ANN001
+            self.xdata = data
+
+        def set_trigger_marker(self, xpos) -> None:  # noqa: ANN001
+            self.trigger_x = xpos
+
+        def set_xlim(self, xlim) -> None:  # noqa: ANN001
+            self.xlim = xlim
+
         def plot(self) -> None:
             return
 
@@ -222,4 +301,45 @@ def test_plugincapture_result_saves_when_write_set(mocker) -> None:
     out = plugin.result()
 
     assert out is plugin._plot
+    plugin._plot.plist[0].xdata_extend([[0]])
+    plugin._plot.plist[0].set_trigger_marker(0.0)
+    plugin._plot.plist[0].set_xlim((0, 0))
     plugin._plot.fig.savefig.assert_called_once_with("snap.png")
+
+
+def test_plugincapture_result_rebases_trigger_to_zero() -> None:
+    class DummyPlotData:
+        def __init__(self) -> None:
+            self.trigger_x = 3
+            self.ydata = [[10.0, 11.0, 12.0, 13.0, 14.0]]
+            self.xdata = [[]]
+            self.xlim = None
+            self.plotted = False
+
+        def xdata_extend(self, data) -> None:  # noqa: ANN001
+            self.xdata[0].extend(data[0])
+
+        def set_trigger_marker(self, xpos) -> None:  # noqa: ANN001
+            self.trigger_x = xpos
+
+        def set_xlim(self, xlim) -> None:  # noqa: ANN001
+            self.xlim = xlim
+
+        def plot(self) -> None:
+            self.plotted = True
+
+    class DummyPlot:
+        def __init__(self) -> None:
+            self.mode = "attached"
+            self.plist = [DummyPlotData()]
+            self.fig = None
+
+    plugin = PluginSnap()
+    plugin._plot = DummyPlot()
+    plugin._write = ""
+
+    out = plugin.result()
+
+    assert out is plugin._plot
+    assert plugin._plot.plist[0].trigger_x == 0.0
+    assert plugin._plot.plist[0].xdata[0] == [-3, -2, -1, 0, 1]

@@ -21,6 +21,7 @@ class PlotDataCommon:
             self._xdata.append([])
             self._ydata.append([])
         self._samples_max = 0
+        self._trigger_x: float | None = None
 
     @property
     def chan(self) -> int:
@@ -46,6 +47,15 @@ class PlotDataCommon:
     def samples_max(self, smax: int) -> None:
         """Set the maximum retained sample count."""
         self._samples_max = smax
+
+    @property
+    def trigger_x(self) -> float | None:
+        """Return last trigger marker X position."""
+        return self._trigger_x
+
+    def set_trigger_marker(self, xpos: float | None) -> None:
+        """Store trigger marker X position."""
+        self._trigger_x = xpos
 
     def xdata_extend(self, data: list[list[Any]]) -> None:
         """Append X-axis data."""
@@ -102,6 +112,13 @@ class PlotDataAxesMpl(PlotDataCommon):
         for i in range(channel.data.vdim):
             lines = self._ax.plot([], [], self._fmt[i])
             self._lns.append(lines[0])
+        self._trigger_line = self._ax.axvline(
+            0.0,
+            color="tab:red",
+            linestyle="--",
+            linewidth=1.0,
+            visible=False,
+        )
 
         self.grid_set(True)
         if len(channel.data.name) > 0:  # pragma: no cover
@@ -120,6 +137,11 @@ class PlotDataAxesMpl(PlotDataCommon):
     def lns(self) -> list["Line2D"]:
         """Return animated line objects."""
         return self._lns
+
+    @property
+    def trigger_line(self) -> "Line2D":
+        """Return trigger marker line."""
+        return self._trigger_line
 
     @property
     def xlim(self) -> Any:
@@ -159,7 +181,13 @@ class PlotDataAxesMpl(PlotDataCommon):
         """Plot all stored series."""
         assert self._ax
         for i, data in enumerate(self._ydata):
-            self._ax.plot(data, self._fmt[i])
+            if self._xdata[i]:
+                self._ax.plot(self._xdata[i], data, self._fmt[i])
+            else:
+                self._ax.plot(data, self._fmt[i])
+        if self._trigger_x is not None:
+            self._trigger_line.set_xdata([self._trigger_x, self._trigger_x])
+            self._trigger_line.set_visible(True)
 
     def xaxis_disable(self) -> None:
         """Hide X-axis ticks."""
