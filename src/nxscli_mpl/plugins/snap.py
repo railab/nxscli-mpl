@@ -68,5 +68,5 @@ class PluginSnap(_PluginStaticBase):
         self._save_plot()
 
         if self._plot.mode == "detached":
-            MplManager.show(block=False)
+            MplManager.show_nonblocking()
         return self._plot

@@ -40,9 +40,46 @@ class MplManager:
             time.sleep(interval)
 
     @staticmethod
-    def show(block: bool = True) -> None:
-        """Show an animation."""
-        plt.show(block=block)  # pragma: no cover
+    def show() -> None:
+        """Show a blocking matplotlib window."""
+        MplManager._show_managers()
+        plt.show(block=True)  # pragma: no cover
+
+    @staticmethod
+    def show_nonblocking() -> None:
+        """Show a nonblocking matplotlib window and flush one GUI tick."""
+        MplManager._show_managers()
+        plt.show(block=False)  # pragma: no cover
+        plt.pause(0.001)
+
+    @staticmethod
+    def _show_managers() -> None:
+        """Ask existing figure managers to present their windows."""
+        for manager in _pylab_helpers.Gcf.get_all_fig_managers():
+            MplManager._present_manager(manager)
+
+    @staticmethod
+    def _present_manager(manager: Any) -> None:
+        """Present one figure manager window."""
+        try:
+            manager.show()
+        except Exception:
+            pass
+        window = getattr(manager, "window", None)
+        if window is None:
+            return
+        try:
+            window.show()
+        except Exception:
+            pass
+        try:
+            window.raise_()
+        except Exception:
+            pass
+        try:
+            window.activateWindow()
+        except Exception:
+            pass
 
     @staticmethod
     def style_set(style: list[str]) -> None:

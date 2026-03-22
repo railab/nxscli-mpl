@@ -25,6 +25,8 @@ class LiveAnimation(PluginAnimationCommonMpl):
         pdata: PlotDataAxesMpl,
         qdata: "PluginQueueData",
         write: str,
+        hold_after_trigger: bool = False,
+        hold_post_samples: int = 0,
     ) -> None:
         """Initialzie an animtaion1 handler.
 
@@ -33,7 +35,15 @@ class LiveAnimation(PluginAnimationCommonMpl):
         :param qdata: stream queue handler
         :param write: write path
         """
-        PluginAnimationCommonMpl.__init__(self, fig, pdata, qdata, write)
+        PluginAnimationCommonMpl.__init__(
+            self,
+            fig,
+            pdata,
+            qdata,
+            write,
+            hold_after_trigger=hold_after_trigger,
+            hold_post_samples=hold_post_samples,
+        )
 
     def _animation_update(
         self,
@@ -46,7 +56,8 @@ class LiveAnimation(PluginAnimationCommonMpl):
         # update sample
         pdata.xdata_extend(frame[0])
         pdata.ydata_extend(frame[1])
-        pdata.set_trigger_marker(frame[2])
+        if frame[2] is not None or not self._hold_after_trigger:
+            pdata.set_trigger_marker(frame[2])
 
         # update y scale
         self.yscale_extend(frame[1], pdata)
@@ -62,8 +73,10 @@ class LiveAnimation(PluginAnimationCommonMpl):
         if pdata.trigger_x is not None:
             pdata.trigger_line.set_xdata([pdata.trigger_x, pdata.trigger_x])
             pdata.trigger_line.set_visible(True)
+        else:
+            pdata.trigger_line.set_visible(False)
 
-        return pdata.lns
+        return pdata.lns + [pdata.trigger_line]
 
 
 ###############################################################################
@@ -86,4 +99,11 @@ class PluginLive(IPluginAnimation):
         kwargs: Any,
     ) -> PluginAnimationCommonMpl:
         """Start an animation1 plugin."""
-        return LiveAnimation(fig, pdata, qdata, kwargs["write"])
+        return LiveAnimation(
+            fig,
+            pdata,
+            qdata,
+            kwargs["write"],
+            hold_after_trigger=kwargs.get("hold_after_trigger", False),
+            hold_post_samples=kwargs.get("hold_post_samples", 0),
+        )

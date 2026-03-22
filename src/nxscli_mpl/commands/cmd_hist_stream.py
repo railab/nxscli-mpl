@@ -33,10 +33,12 @@ def cmd_phist_stream(
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
+    hold_after_trigger: bool,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
     """[plugin] Windowed streaming histogram plot."""
+    del hold_after_trigger
     return enable_plot_command(
         ctx,
         "m_hist_live",

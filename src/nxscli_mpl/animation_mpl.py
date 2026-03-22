@@ -67,6 +67,7 @@ class IPluginAnimation(IPluginPlotDynamic):
         super().__init__()
 
         self._plot: "PluginPlotMpl"
+        self._shown = False
 
     @classmethod
     def get_inputhook(cls) -> Any:
@@ -163,6 +164,7 @@ class IPluginAnimation(IPluginPlotDynamic):
     def result(self) -> "PluginPlotMpl":
         """Get animation plugin result."""
         assert self._plot
-        if self._plot.mode == "detached":
-            MplManager.show(block=False)
+        if self._plot.mode == "detached" and not self._shown:
+            MplManager.show()
+            self._shown = True
         return self._plot

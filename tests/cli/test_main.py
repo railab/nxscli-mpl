@@ -57,6 +57,14 @@ def test_main_m_live(runner):
     assert result.exit_code == 0
 
 
+def test_main_m_live_hold_after_trigger_option(runner, enable_plugin):
+    patched = enable_plugin
+    args = ["dummy", "chan", "1", "m_live", "--hold-after-trigger"]
+    result = runner.invoke(main, args)
+    assert result.exit_code == 0
+    assert patched.call_args.kwargs["hold_after_trigger"] is True
+
+
 def test_main_m_roll(runner):
     args = ["chan", "1", "m_roll", "1"]
     result = runner.invoke(main, args)

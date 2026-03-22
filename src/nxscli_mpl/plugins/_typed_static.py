@@ -56,7 +56,7 @@ class PluginTypedStatic(_PluginStaticBase):
         self._save_plot()
 
         if self._plot.mode == "detached":
-            MplManager.show(block=False)
+            MplManager.show_nonblocking()
         return self._plot
 
     def _render_pdata(self, pdata: Any) -> None:  # pragma: no cover

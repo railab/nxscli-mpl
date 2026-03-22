@@ -58,7 +58,7 @@ def test_ipluginanimation_start_nochannels(mocker):
 
     # result
     x.result()
-    show.assert_called_once_with(block=False)
+    show.assert_called_once_with()
 
     # stop
     x.stop()
@@ -111,3 +111,20 @@ def test_ipluginanimation_result_attached(mocker):
     assert ret.mode == "attached"
     show.assert_not_called()
     x.stop()
+
+
+def test_ipluginanimation_start_shows_detached_hold_plot(mocker):
+    x = XTestPluginAnimation()
+    x.connect_phandler(FakePluginHandler())
+    plot = FakePlot()
+    mocker.patch(
+        "nxscli_mpl.animation_mpl.build_plot_surface", return_value=plot
+    )
+    show = mocker.patch("nxscli_mpl.animation_mpl.MplManager.show")
+
+    args = make_plot_kwargs(hold_after_trigger=True)
+    assert x.start(args) is True
+    show.assert_not_called()
+
+    x.result()
+    show.assert_called_once_with()

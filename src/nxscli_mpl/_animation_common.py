@@ -16,6 +16,7 @@ def fetch_animation_frame(
     *,
     count: int,
     limit: int = ANIMATION_FRAME_DRAIN_LIMIT,
+    stop_on_trigger: bool = False,
 ) -> tuple[
     list[np.ndarray[Any, Any]],
     list[np.ndarray[Any, Any]],
@@ -39,8 +40,9 @@ def fetch_animation_frame(
         event_getter = getattr(qdata, "pop_trigger_event", None)
         event = event_getter() if callable(event_getter) else None
         batch_start = next_count
-        if event is not None:
+        if event is not None and trigger_x is None:
             trigger_x = batch_start + event.sample_index
+        had_samples = False
 
         for block in data:
             if not isinstance(block, DNxscopeStreamBlock):
@@ -52,11 +54,14 @@ def fetch_animation_frame(
             nsamples = int(block_data.shape[0])
             if nsamples == 0:
                 continue
+            had_samples = True
             xr = np.arange(next_count, next_count + nsamples)
             x_chunks.append(xr)
             for i in range(qdata.vdim):
                 y_chunks[i].append(block_data[:, i])
             next_count += nsamples
+        if stop_on_trigger and event is not None and had_samples:
+            break
 
     xcat = (
         np.concatenate(x_chunks)

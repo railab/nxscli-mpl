@@ -189,7 +189,7 @@ def test_plugincapture_result_detached_shows_figure_and_finalizes(
     plugin = PluginSnap()
     plugin._plot = DummyPlot()
     plugin._write = ""
-    show = mocker.patch("nxscli_mpl.plugins.snap.MplManager.show")
+    show = mocker.patch("nxscli_mpl.plugins.snap.MplManager.show_nonblocking")
     info = mocker.patch("nxscli_mpl.plugins.snap.logger.info")
 
     out = plugin.result()
@@ -200,7 +200,7 @@ def test_plugincapture_result_detached_shows_figure_and_finalizes(
     plugin._plot.plist[0].xdata_extend([[0]])
     plugin._plot.plist[0].set_trigger_marker(0.0)
     plugin._plot.plist[0].set_xlim((0, 0))
-    show.assert_called_once_with(block=False)
+    show.assert_called_once_with()
     info.assert_called_once_with("plot capture DONE")
 
 

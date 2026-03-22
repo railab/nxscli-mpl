@@ -19,14 +19,23 @@ if TYPE_CHECKING:
 
 @click.command(name="m_roll")
 @click.argument("maxsamples", type=int, required=True)
+@click.option(
+    "--hold-post-samples",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Keep updating this many samples after the trigger before hold.",
+)
 @plot_options
 @pass_environment
 def cmd_m_roll(
     ctx: Environment,
     maxsamples: int,
+    hold_post_samples: int,
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
+    hold_after_trigger: bool,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
@@ -38,6 +47,8 @@ def cmd_m_roll(
         channels=chan,
         trig=trig,
         dpi=dpi,
+        hold_after_trigger=hold_after_trigger,
+        hold_post_samples=hold_post_samples,
         fmt=fmt,
         write=write,
     )

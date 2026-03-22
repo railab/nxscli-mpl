@@ -178,7 +178,7 @@ def test_typed_windowed_start_and_result_use_common_plot_surface(
     mocker.patch.object(
         typed_windowed, "_WindowedTypedAnimation", StopTrackingAni
     )
-    show = mocker.patch.object(windowed_common.MplManager, "show")
+    show = mocker.patch.object(windowed_common.MplManager, "show_nonblocking")
 
     out = plugin.start(
         make_plot_kwargs(
@@ -199,7 +199,7 @@ def test_typed_windowed_start_and_result_use_common_plot_surface(
     assert plugin.result() is plot
     plugin.stop()
     assert plot.ani[0].started == 0
-    show.assert_called_once_with(block=False)
+    show.assert_called_once_with()
 
 
 def test_windowed_animation_init_sets_pipeline_defaults() -> None:
