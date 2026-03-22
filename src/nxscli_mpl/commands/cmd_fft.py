@@ -23,10 +23,12 @@ def cmd_pfft(
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
+    hold_after_trigger: bool,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
     """[plugin] Static FFT plot for a given number of samples."""
+    del hold_after_trigger
     return enable_plot_command(
         ctx,
         "m_fft",

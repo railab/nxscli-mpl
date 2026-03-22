@@ -82,6 +82,6 @@ def start_animation(
         frames=frames,
         init_func=init,
         interval=1,
-        blit=True,
+        blit=False,
         cache_frame_data=False,
     )

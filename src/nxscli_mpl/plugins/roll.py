@@ -25,6 +25,8 @@ class RollAnimation(PluginAnimationCommonMpl):
         pdata: PlotDataAxesMpl,
         qdata: "PluginQueueData",
         write: str,
+        hold_after_trigger: bool = False,
+        hold_post_samples: int = 0,
         static_xticks: bool = True,
         disable_xaxis: bool = False,
     ):
@@ -37,7 +39,15 @@ class RollAnimation(PluginAnimationCommonMpl):
         :param static_xticks: use static X axis ticks
         :param disable_xaxis: disable X axis ticks
         """
-        PluginAnimationCommonMpl.__init__(self, fig, pdata, qdata, write)
+        PluginAnimationCommonMpl.__init__(
+            self,
+            fig,
+            pdata,
+            qdata,
+            write,
+            hold_after_trigger=hold_after_trigger,
+            hold_post_samples=hold_post_samples,
+        )
 
         if static_xticks is True:
             self._animation_update_priv = self._animation_update_staticx
@@ -84,11 +94,14 @@ class RollAnimation(PluginAnimationCommonMpl):
             else:
                 pdata.set_trigger_marker(None)
                 pdata.trigger_line.set_visible(False)
+        elif self._hold_after_trigger and pdata.trigger_x is not None:
+            pdata.trigger_line.set_xdata([pdata.trigger_x, pdata.trigger_x])
+            pdata.trigger_line.set_visible(True)
         else:
             pdata.set_trigger_marker(None)
             pdata.trigger_line.set_visible(False)
 
-        return pdata.lns
+        return pdata.lns + [pdata.trigger_line]
 
     def _animation_update_dynamicx(
         self,
@@ -105,7 +118,8 @@ class RollAnimation(PluginAnimationCommonMpl):
         # update sample
         pdata.xdata_extend_max(xdata)
         pdata.ydata_extend_max(ydata)
-        pdata.set_trigger_marker(frame[2])
+        if frame[2] is not None or not self._hold_after_trigger:
+            pdata.set_trigger_marker(frame[2])
 
         # update y scale
         self.yscale_extend(ydata, pdata)
@@ -124,7 +138,7 @@ class RollAnimation(PluginAnimationCommonMpl):
         else:
             pdata.trigger_line.set_visible(False)
 
-        return pdata.lns
+        return pdata.lns + [pdata.trigger_line]
 
 
 ###############################################################################
@@ -159,6 +173,8 @@ class PluginRoll(IPluginAnimation):
             pdata,
             qdata,
             kwargs["write"],
+            hold_after_trigger=kwargs.get("hold_after_trigger", False),
+            hold_post_samples=kwargs.get("hold_post_samples", 0),
             static_xticks=True,
             disable_xaxis=False,
         )

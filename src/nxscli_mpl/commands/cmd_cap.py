@@ -28,6 +28,7 @@ def cmd_m_snap(
     chan: list[int],
     trig: dict[int, "DTriggerConfigReq"],
     dpi: float,
+    hold_after_trigger: bool,
     fmt: list[list[str]],
     write: str,
 ) -> bool:
@@ -36,6 +37,7 @@ def cmd_m_snap(
     If SAMPLES argument is set to 'i' then we capture data until enter
     is press.
     """  # noqa: D301
+    del hold_after_trigger
     return enable_plot_command(
         ctx,
         "m_snap",

@@ -19,6 +19,7 @@ from nxslib.nxscope import DNxscopeStreamBlock
 from nxscli_mpl._animation_common import fetch_animation_frame
 from nxscli_mpl._animation_lifecycle import (
     setup_writer,
+    start_animation,
     stop_animation,
     update_animation_common,
 )
@@ -144,6 +145,35 @@ def test_mplmanager_func_animation_delegates(mocker) -> None:
     create.assert_called_once_with(fig=fig, func=func, frames=frames)
 
 
+def test_start_animation_disables_blitting(mocker) -> None:
+    fig = Figure()
+    update = mocker.Mock()
+    frames = mocker.Mock()
+    init = mocker.Mock()
+    create = mocker.patch(
+        "nxscli_mpl._animation_lifecycle.MplManager.func_animation",
+        return_value="ani",
+    )
+
+    out = start_animation(
+        fig=fig,
+        update=update,
+        frames=frames,
+        init=init,
+    )
+
+    assert out == "ani"
+    create.assert_called_once_with(
+        fig=fig,
+        func=update,
+        frames=frames,
+        init_func=init,
+        interval=1,
+        blit=False,
+        cache_frame_data=False,
+    )
+
+
 def test_pluginanimationcommonmpl():
     q = queue.Queue()
     chan = DeviceChannel(chan=0, _type=2, vdim=2, name="chan0")
@@ -156,6 +186,145 @@ def test_pluginanimationcommonmpl():
 
     x.stop()
     # TODO
+
+
+def test_pluginanimationcommonmpl_trim_and_hold_helpers() -> None:
+    q = queue.Queue()
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = Axes(fig, (1, 1, 2, 6))
+    pdata = PlotDataAxesMpl(axes, chan)
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    qdata = PluginQueueData(q, chan, dtc)
+    ani = PluginAnimationCommonMpl(
+        fig,
+        pdata,
+        qdata,
+        "",
+        hold_after_trigger=True,
+        hold_post_samples=4,
+    )
+
+    frame1 = (
+        [np.array([10.0, 11.0, 12.0])],
+        [np.array([1.0, 2.0, 3.0])],
+        10.5,
+    )
+    out1 = ani._trim_frame_for_hold(frame1)
+    assert np.array_equal(out1[0][0], np.array([10.0, 11.0, 12.0]))
+    assert ani._hold_ready(12.0) is False
+    assert ani._hold_ready(None) is False
+
+    frame2 = (
+        [np.array([10.0, 11.0, 12.0, 13.0, 14.0, 15.0])],
+        [np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])],
+        None,
+    )
+    out2 = ani._trim_frame_for_hold(frame2)
+    assert np.array_equal(out2[0][0], np.array([10.0, 11.0, 12.0, 13.0, 14.0]))
+    assert np.array_equal(out2[1][0], np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
+    assert ani._hold_ready(14.0) is True
+
+
+def test_pluginanimationcommonmpl_xscale_extend_reaches_frame_max() -> None:
+    q = queue.Queue()
+    chan = DeviceChannel(chan=0, _type=2, vdim=1, name="chan0")
+    fig = Figure()
+    axes = fig.add_subplot(111)
+    pdata = PlotDataAxesMpl(axes, chan)
+    dtc = DTriggerConfig(ETriggerType.ALWAYS_OFF)
+    qdata = PluginQueueData(q, chan, dtc)
+    ani = PluginAnimationCommonMpl(fig, pdata, qdata, False)
+    pdata.set_xlim((0.0, 0.055))
+
+    ani.xscale_extend([np.array([0.0, 1.0, 127.0])], pdata)
+
+    assert pdata.ax.get_xlim()[1] >= 127.0
+
+
+def test_mplmanager_show_nonblocking(mocker) -> None:
+    show_managers = mocker.patch.object(MplManager, "_show_managers")
+    mocker.patch("nxscli_mpl._mpl_manager.plt.show")
+    pause = mocker.patch("nxscli_mpl._mpl_manager.plt.pause")
+
+    MplManager.show_nonblocking()
+
+    show_managers.assert_called_once_with()
+    pause.assert_called_once_with(0.001)
+
+
+def test_mplmanager_show_blocking(mocker) -> None:
+    import importlib
+
+    import nxscli_mpl._mpl_manager as mpl_manager_mod
+
+    mpl_manager_mod = importlib.reload(mpl_manager_mod)
+    raw_manager = mpl_manager_mod.MplManager
+
+    manager = mocker.Mock()
+    mocker.patch(
+        "nxscli_mpl._mpl_manager._pylab_helpers.Gcf.get_all_fig_managers",
+        return_value=[manager],
+    )
+    show = mocker.patch("nxscli_mpl._mpl_manager.plt.show")
+
+    raw_manager.show()
+
+    manager.show.assert_called_once_with()
+    show.assert_called_once_with(block=True)
+
+
+def test_mplmanager_show_managers_ignores_backend_errors(mocker) -> None:
+    good = mocker.Mock()
+    bad = mocker.Mock()
+    bad.show.side_effect = RuntimeError("boom")
+    mocker.patch(
+        "nxscli_mpl._mpl_manager._pylab_helpers.Gcf.get_all_fig_managers",
+        return_value=[good, bad],
+    )
+
+    MplManager._show_managers()
+
+    good.show.assert_called_once_with()
+    bad.show.assert_called_once_with()
+
+
+def test_mplmanager_present_manager_raises_and_activates(mocker) -> None:
+    manager = mocker.Mock()
+    window = mocker.Mock()
+    manager.window = window
+
+    MplManager._present_manager(manager)
+
+    manager.show.assert_called_once_with()
+    window.show.assert_called_once_with()
+    window.raise_.assert_called_once_with()
+    window.activateWindow.assert_called_once_with()
+
+
+def test_mplmanager_present_manager_without_window(mocker) -> None:
+    manager = mocker.Mock()
+    manager.window = None
+
+    MplManager._present_manager(manager)
+
+    manager.show.assert_called_once_with()
+
+
+def test_mplmanager_present_manager_ignores_window_errors(mocker) -> None:
+    manager = mocker.Mock()
+    window = mocker.Mock()
+    window.show.side_effect = RuntimeError("show")
+    window.raise_.side_effect = RuntimeError("raise")
+    window.activateWindow.side_effect = RuntimeError("activate")
+    manager.window = window
+
+    MplManager._present_manager(manager)
+
+    manager.show.assert_called_once_with()
+    window.show.assert_called_once_with()
+    window.raise_.assert_called_once_with()
+    window.activateWindow.assert_called_once_with()
 
 
 def test_fetch_animation_frame_returns_trigger_marker() -> None:
@@ -194,6 +363,128 @@ def test_fetch_animation_frame_returns_trigger_marker() -> None:
     assert trigger_x == 5
     assert np.array_equal(xdata[0], np.array([4, 5, 6]))
     assert np.array_equal(ydata[0], np.array([1.0, 2.0, 3.0]))
+
+
+def test_pluginanimationcommonmpl_animation_frames_repeat(mocker) -> None:
+    ani = PluginAnimationCommonMpl(
+        object(),
+        object(),
+        object(),
+        "",
+    )
+    fetch = mocker.patch.object(
+        ani,
+        "_animation_frames_blocks",
+        side_effect=[
+            ([np.array([0.0])], [np.array([1.0])], None),
+            ([np.array([1.0])], [np.array([2.0])], 1.0),
+        ],
+    )
+
+    frames = ani._animation_frames(object())
+
+    first = next(frames)
+    assert np.array_equal(first[0][0], np.array([0.0]))
+    assert np.array_equal(first[1][0], np.array([1.0]))
+    assert first[2] is None
+
+    second = next(frames)
+    assert np.array_equal(second[0][0], np.array([1.0]))
+    assert np.array_equal(second[1][0], np.array([2.0]))
+    assert second[2] == 1.0
+    assert fetch.call_count == 2
+
+
+def test_pluginanimationcommonmpl_trim_for_hold_passthrough() -> None:
+    ani = PluginAnimationCommonMpl(
+        object(),
+        object(),
+        object(),
+        "",
+        hold_after_trigger=False,
+    )
+    frame = ([np.array([1.0, 2.0])], [np.array([3.0, 4.0])], None)
+
+    assert ani._trim_frame_for_hold(frame) == frame
+
+
+def test_pluginanimationcommonmpl_trim_handles_empty_xdata() -> None:
+    ani = PluginAnimationCommonMpl(
+        object(),
+        object(),
+        object(),
+        "",
+        hold_after_trigger=True,
+        hold_post_samples=2,
+    )
+    ani._hold_trigger_x = 4.0
+    ani._hold_stop_x = 5.5
+    frame = ([np.array([])], [np.array([])], None)
+
+    trimmed = ani._trim_frame_for_hold(frame)
+
+    assert len(trimmed[0]) == 1
+    assert len(trimmed[1]) == 1
+    assert np.array_equal(trimmed[0][0], np.array([]))
+    assert np.array_equal(trimmed[1][0], np.array([]))
+    assert trimmed[2] is None
+
+
+def test_fetch_animation_frame_stops_after_first_trigger_batch() -> None:
+    class FakeQueueData:
+        vdim = 1
+
+        def __init__(self) -> None:
+            self._payloads = [
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[1.0], [2.0]]),
+                        meta=None,
+                    )
+                ],
+                [
+                    DNxscopeStreamBlock(
+                        data=np.array([[3.0], [4.0]]),
+                        meta=None,
+                    )
+                ],
+            ]
+            self._events = [
+                DTriggerEvent(
+                    sample_index=2.0,
+                    channel=7,
+                    capture_mode="start_after",
+                ),
+                None,
+            ]
+
+        def queue_get(self, block: bool = False):  # noqa: ANN001, ARG002
+            if not self._payloads:
+                return []
+            return self._payloads.pop(0)
+
+        def pop_trigger_event(self) -> DTriggerEvent | None:
+            if not self._events:
+                return None
+            return self._events.pop(0)
+
+    qdata = FakeQueueData()
+    xdata, ydata, next_count, trigger_x = fetch_animation_frame(
+        qdata,
+        count=10,
+        stop_on_trigger=True,
+    )
+
+    assert next_count == 12
+    assert trigger_x == 12.0
+    assert np.array_equal(xdata[0], np.array([10, 11]))
+    assert np.array_equal(ydata[0], np.array([1.0, 2.0]))
+    remaining = qdata.queue_get(block=False)
+    assert len(remaining) == 1
+    assert np.array_equal(remaining[0].data, np.array([[3.0], [4.0]]))
+    assert qdata.queue_get(block=False) == []
+    assert qdata.pop_trigger_event() is None
+    assert qdata.pop_trigger_event() is None
 
 
 def dummy_stream_sub(ch):
@@ -311,7 +602,7 @@ def test_pluginanimationcommonmpl_init_and_start_delegate(mocker) -> None:
         return_value="animation",
     )
 
-    assert ani._animation_init(pdata) is pdata.lns
+    assert ani._animation_init(pdata) == pdata.lns + [pdata.trigger_line]
     ani.start()
 
     assert ani._writer is None

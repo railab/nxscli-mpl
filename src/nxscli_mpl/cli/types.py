@@ -45,6 +45,12 @@ _plot_options = (
     ),
     click.option("--dpi", type=int, default=100),
     click.option(
+        "--hold-after-trigger",
+        is_flag=True,
+        default=False,
+        help="Stop live plot updates after the first trigger event.",
+    ),
+    click.option(
         "--fmt",
         default="",
         type=StringList2(ch1="?"),

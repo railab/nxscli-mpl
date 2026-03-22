@@ -99,6 +99,8 @@ class PluginAnimationCommonMpl:
         pdata: PlotDataAxesMpl,
         qdata: PluginQueueData,
         write: str,
+        hold_after_trigger: bool = False,
+        hold_post_samples: int = 0,
     ):
         """Initialize animation handler.
 
@@ -112,17 +114,23 @@ class PluginAnimationCommonMpl:
         self._plot_data = pdata
         self._queue_data = qdata
         self._ani = None
+        self._hold_after_trigger = hold_after_trigger
+        self._hold_post_samples = hold_post_samples
+        self._held_on_trigger = False
+        self._hold_trigger_x: float | None = None
+        self._hold_stop_x: float | None = None
         self._writer: PillowWriter | FFMpegWriter | None
         self._writer = setup_writer(self._fig, write)
 
     def _animation_init(self, pdata: PlotDataAxesMpl) -> list["Line2D"]:
-        return pdata.lns
+        return pdata.lns + [pdata.trigger_line]
 
     def _animation_frames(
         self, qdata: PluginQueueData
     ) -> Generator[Any, None, None]:  # pragma: no cover
-        xdata, ydata, trigger_x = self._animation_frames_blocks(qdata)
-        yield xdata, ydata, trigger_x
+        while True:
+            xdata, ydata, trigger_x = self._animation_frames_blocks(qdata)
+            yield xdata, ydata, trigger_x
 
     def _animation_frames_blocks(self, qdata: PluginQueueData) -> tuple[
         list["np.ndarray[Any, Any]"],
@@ -130,7 +138,11 @@ class PluginAnimationCommonMpl:
         float | None,
     ]:
         xdata, ydata, self._sample_count, trigger_x = fetch_animation_frame(
-            qdata, count=self._sample_count
+            qdata,
+            count=self._sample_count,
+            stop_on_trigger=(
+                self._hold_after_trigger and self._hold_post_samples == 0
+            ),
         )
         return xdata, ydata, trigger_x
 
@@ -157,12 +169,93 @@ class PluginAnimationCommonMpl:
         pdata: PlotDataAxesMpl,
     ) -> list["Line2D"]:  # pragma: no cover
         """Update animation common logic."""
-        return update_animation_common(
+        frame = self._trim_frame_for_hold(frame)
+        artists = pdata.lns + [pdata.trigger_line]
+        has_x = any(len(series) > 0 for series in frame[0])
+        has_y = any(len(series) > 0 for series in frame[1])
+        if not has_x and not has_y and frame[2] is None:
+            return artists
+        lines = update_animation_common(
             frame,
-            pdata.lns,
+            artists,
             lambda current: self._animation_update(current, pdata),
             self._writer,
         )
+        self._hold_on_trigger(frame)
+        return lines
+
+    def _trim_frame_for_hold(
+        self,
+        frame: tuple[list[Any], list[Any], float | None],
+    ) -> tuple[list[Any], list[Any], float | None]:
+        """Trim the final hold frame to the configured post-trigger length."""
+        if not self._hold_after_trigger:
+            return frame
+
+        xdata, ydata, trigger_x = frame
+        if trigger_x is not None and self._hold_trigger_x is None:
+            self._hold_trigger_x = trigger_x
+            if self._hold_post_samples > 0:
+                self._hold_stop_x = (
+                    trigger_x + float(self._hold_post_samples) - 0.5
+                )
+
+        if self._hold_stop_x is None:
+            return frame
+        if not xdata or len(xdata[0]) == 0:
+            return frame
+
+        keep = xdata[0] <= self._hold_stop_x
+        if bool(keep.all()):
+            return frame
+
+        trimmed_x = [series[keep] for series in xdata]
+        trimmed_y = [series[keep] for series in ydata]
+        return trimmed_x, trimmed_y, trigger_x
+
+    def _hold_ready(self, latest_x: float | None) -> bool:
+        """Return whether hold conditions are satisfied for the frame."""
+        if self._hold_trigger_x is None:
+            return False
+        if self._hold_post_samples <= 0:
+            return True
+        if latest_x is None:
+            return False
+        assert self._hold_stop_x is not None
+        return latest_x >= self._hold_stop_x
+
+    def _hold_on_trigger(
+        self, frame: tuple[list[Any], list[Any], float | None]
+    ) -> None:
+        """Pause the animation after the first rendered trigger event."""
+        trigger_x = frame[2]
+        if not self._hold_after_trigger or self._held_on_trigger:
+            return
+        if trigger_x is not None and self._hold_trigger_x is None:
+            self._hold_trigger_x = trigger_x
+            if self._hold_post_samples > 0:
+                self._hold_stop_x = (
+                    trigger_x + float(self._hold_post_samples) - 0.5
+                )
+        latest_x = None
+        if frame[0] and len(frame[0][0]) > 0:
+            latest_x = float(frame[0][0][-1])
+        if not self._hold_ready(latest_x):
+            return
+
+        self._held_on_trigger = True
+        canvas = getattr(self._fig, "canvas", None)
+        if canvas is not None:
+            draw_idle = getattr(canvas, "draw_idle", None)
+            if callable(draw_idle):
+                draw_idle()
+            else:  # pragma: no cover
+                canvas.draw()
+            flush_events = getattr(canvas, "flush_events", None)
+            if callable(flush_events):  # pragma: no branch
+                flush_events()
+        if self._ani is not None and self._ani.event_source is not None:
+            self._ani.event_source.stop()
 
     def start(self) -> None:
         """Start an animation."""
@@ -239,7 +332,10 @@ class PluginAnimationCommonMpl:
 
         # change x scale
         if tmax > xmax:
-            pdata.ax.set_xlim(xmin, scale * xmax)
+            new_xmax = max(scale * xmax, float(tmax))
+            if new_xmax <= xmin:
+                new_xmax = float(tmax) + 1.0
+            pdata.ax.set_xlim(xmin, new_xmax)
             pdata.ax.figure.canvas.draw()
 
     def xscale_saturate(

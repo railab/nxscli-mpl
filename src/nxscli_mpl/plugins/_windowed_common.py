@@ -46,7 +46,7 @@ class _PluginWindowedBase(IPluginPlotDynamic):
     def result(self) -> "PluginPlotMpl":  # pragma: no cover
         assert self._plot
         if self._plot.mode == "detached":
-            MplManager.show(block=False)
+            MplManager.show_nonblocking()
         return self._plot
 
 
